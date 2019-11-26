@@ -89,12 +89,15 @@ class PeriodicTable(metaclass=Singleton):
                 return edge_data_item.get("edges", dict()).get(electron_shell.get_shell_str_in_eels_notation(True))
         return None
 
-    def get_elements_list(self) -> typing.Tuple[int, str]:
+    def get_elements_list(self) -> typing.Tuple[typing.Tuple[int,str],...]:
         """Return a list of tuples: atomic number, atomic symbol."""
-        return ((edge_data_item.get("z"), edge_data_item.get("symbol")) for edge_data_item in self.__edge_data)
+        # J. Kas - changed output type to tuple of tuples, since that's what it is. Also change the for loop below to
+        # define a list, which is then used to create the output tuple. Otherwise generator function error is thrown.
+        return tuple([(edge_data_item.get("z"), edge_data_item.get("symbol")) for edge_data_item in self.__edge_data])
 
-    def get_edges_list(self, atomic_number: int) -> typing.Tuple[ElectronShell, str]:
+    def get_edges_list(self, atomic_number: int) -> typing.List[typing.Tuple[ElectronShell, str]]:
         """Return a list of tuples: electron shell (lowest energy within shell number), edge name (without subshell)."""
+        # J. Kas - Changed output typing to a list of tuples.
         for edge_data_item in self.__edge_data:
             if edge_data_item.get("z", 0) == atomic_number:
                 edge_dict = edge_data_item.get("edges", dict())
@@ -107,24 +110,28 @@ class PeriodicTable(metaclass=Singleton):
                 return list((edge_map[key][0], edge_map[key][0].to_long_str()) for key in sorted(edge_map.keys()))
         return None
 
-    def find_edges_in_energy_interval(self, energy_interval_ev: typing.Tuple[float, float]) -> typing.List[ElectronShell]:
+    def find_edges_in_energy_interval(self, energy_interval_ev: typing.Tuple[float, float], atomic_number_in: int = None) -> typing.List[ElectronShell]:
         """Return list of electron shells found within energy interval, sorted by distance from center."""
+        # J. Kas - Added optional atomic number so that we can use this function to find all edges from a single atomic species.
+        print(self.__edge_data)
         edges = list()  # typing.List[typing.Tuple[float, ElectronShell]]
         energy_interval_center_ev = (energy_interval_ev[0] + energy_interval_ev[1]) * 0.5
         for edge_data_item in self.__edge_data:
             atomic_number = edge_data_item.get("z", 0)
-            edge_dict = edge_data_item.get("edges", dict())
-            # find lowest energy edge within each shell
-            edge_map = dict()
-            for eels_shell, energy in edge_dict.items():
-                electron_shell = ElectronShell.from_eels_notation(atomic_number, eels_shell)
-                base_electron_shell = edge_map.setdefault(electron_shell.shell_number, (None, 1E9))
-                if energy < base_electron_shell[1]:
-                    edge_map[electron_shell.shell_number] = (electron_shell, energy)
-            for electron_shell, energy in edge_map.values():
-                if energy_interval_ev[0] <= energy <= energy_interval_ev[1]:
-                    edges.append((abs(energy_interval_center_ev - energy), electron_shell))
-        edges.sort(key=operator.itemgetter(0))
+            if atomic_number == atomic_number_in or atomic_number_in is None:
+                edge_dict = edge_data_item.get("edges", dict())
+                # find lowest energy edge within each shell
+                edge_map = dict()
+                for eels_shell, energy in edge_dict.items():
+                    electron_shell = ElectronShell.from_eels_notation(atomic_number, eels_shell)
+                    base_electron_shell = edge_map.setdefault(electron_shell.shell_number, (None, 1E9))
+                    if energy < base_electron_shell[1]:
+                        edge_map[electron_shell.shell_number] = (electron_shell, energy)
+                        for electron_shell, energy in edge_map.values():
+                            if energy_interval_ev[0] <= energy <= energy_interval_ev[1]:
+                                edges.append((abs(energy_interval_center_ev - energy), electron_shell))
+                                edges.sort(key=operator.itemgetter(0))
+        
         return [edge[1] for edge in edges]
 
 
