@@ -271,11 +271,10 @@ def partial_cross_section_nm2(atomic_number: int, shell_number: int, subshell_in
         # Now get a list of shells for this atomic species for which the edge
         # energy is within the energy range specified by edge_onset_eV to
         # edge_onset + edge_delta_eV
-        energy_interval_eV = (edge_onset_eV, edge_onset_eV + edge_delta_eV)
+        energy_margin = 10.0 # Chemical shifts can make theoretical edge +/- 10eV of experimental.
+        energy_interval_eV = (edge_onset_eV-energy_margin, edge_onset_eV + edge_delta_eV)
         shells = ptable.find_edges_in_energy_interval(energy_interval_eV,atomic_number)
-        #for shell in shells:
-        #    print(shell.atomic_number, shell.subshell_index,shell.get_shell_str_in_eels_notation(include_subshell=True))
-        #return
+        assert len(shells) == 0, "No edges for this atom in energy range specified. Atomic #: "  + str(atomic_number)
 
         energy_step = 0.1  # Set small energy step for now. Adjust later depending on core-hole broadening.
         egrid_eV = numpy.arange(edge_onset_eV, edge_onset_eV + edge_delta_eV, 0.1) # Define energy grid
@@ -284,14 +283,13 @@ def partial_cross_section_nm2(atomic_number: int, shell_number: int, subshell_in
         # Loop over shells in energy range and get total cross section.
         for shell in shells:
             edge_label = shell.get_shell_str_in_eels_notation(include_subshell=True)
-            #print(edge_label)
             beam_energy_keV = beam_energy_eV/1000.0
             convergence_angle_mrad = convergence_angle_rad*1000.0
             collection_angle_mrad = collection_angle_rad*1000.0
             energyDiffSigma,edge_energy = atomic_diff_cross_section(atomic_number, edge_label, beam_energy_keV,
                                                                 convergence_angle_mrad, collection_angle_mrad, egrid_eV)
             energyDiffSigma_total = numpy.add(energyDiffSigma_total,energyDiffSigma)
-        #print(edge_energy)
+
     else:
         energyDiffSigma_total = energy_diff_cross_section_nm2_per_eV(atomic_number, shell_number, subshell_index,
                                                            edge_onset_eV, edge_delta_eV, beam_energy_eV,
@@ -302,5 +300,6 @@ def partial_cross_section_nm2(atomic_number: int, shell_number: int, subshell_in
 
                                                     
     partialCrossSection = numpy.trapz(energyDiffSigma_total, dx = energy_step)
+    #print(atomic_number,partialCrossSection)
 
     return partialCrossSection
