@@ -6,10 +6,12 @@
 
 # third party libraries
 import numpy
+import typing
 
 # local libraries
-from . import CurveFittingAndAnalysis
-from . import EELS_CrossSections
+from nion.eels_analysis import CurveFittingAndAnalysis
+from nion.eels_analysis import EELS_CrossSections
+from nion.eels_analysis import PeriodicTable
 
 def zero_loss_peak(low_loss_spectra: numpy.ndarray, low_loss_range_eV: numpy.ndarray) -> tuple:
     """Isolate the zero-loss peak from low-loss spectra and return the zero-loss count, zero-loss peak, and loss-spectrum arrays.
@@ -40,7 +42,6 @@ def core_loss_edge(core_loss_spectra: numpy.ndarray, core_loss_range_eV: numpy.n
     poly_order = 1
     fit_log_y = (background_model_ID <= 1)
     fit_log_x = (background_model_ID == 0)
-
     return CurveFittingAndAnalysis.signal_from_polynomial_background(core_loss_spectra, core_loss_range_eV, edge_range,
                                                                         background_ranges_eV, poly_order, fit_log_y, fit_log_x)
 
@@ -54,7 +55,6 @@ def relative_atomic_abundance(core_loss_spectra: numpy.ndarray, core_loss_range_
         in units of (spectrum counts) * atoms / (nm * nm).
     """
     edge_data = core_loss_edge(core_loss_spectra, core_loss_range_eV, edge_onset_eV, edge_delta_eV, background_ranges_eV)
-
     # The following should ultimately be pulled out of the edge ID table, based on atomic number and edge onset
     shell_number = 1
     subshell_index = 1
@@ -63,6 +63,42 @@ def relative_atomic_abundance(core_loss_spectra: numpy.ndarray, core_loss_range_
     atomic_abundance = edge_data[0] / cross_section
     return atomic_abundance
 
+def stoichiometry_from_eels(eels_spectrum: numpy.ndarray, eels_range_eV: numpy.ndarray, background_ranges_eV: typing.List[numpy.ndarray], atomic_numbers: typing.List[int],
+                                 edge_onsets_eV: typing.List[float], edge_deltas_eV: typing.List[float], 
+                                 beam_energy_eV: float, convergence_angle_rad: float, collection_angle_rad: float) -> typing.List[float]:
+    """Quantify a complete EELS spectrum given atomic species in the system and edges in the spectrum (signal ranges and background ranges).
+
+    Returns:
+        stoichiometries - relative to first atom in list.
+        calculated cross sections - in nm^2.
+    """
+    # For now assert that the number of atomic species, background_ranges, edge_onsets, edge_deltas are equal. This assumes that each
+    # edge range only contains signal from one atomic species.
+    assert len(edge_onsets_eV) > 1
+    assert len(edge_onsets_eV) == len(atomic_numbers)
+    assert len(edge_onsets_eV) == len(edge_deltas_eV)
+    assert len(edge_onsets_eV) == len(background_ranges_eV)
+
+
+    # First calculate the cross section associated with each edge. 
+    # Loop over atoms in the spectrum.
+    iAtom = 0
+    abundance=[0.0]*len(atomic_numbers)
+    stoichiometry=[0.0]*len(atomic_numbers)
+    
+    for atomic_number in atomic_numbers:
+        # Find relative atomic abundance for this edge.
+        abundance[iAtom] = relative_atomic_abundance(eels_spectrum, eels_range_eV, background_ranges_eV[iAtom][:],
+                                                         atomic_number, edge_onsets_eV[iAtom], edge_deltas_eV[iAtom], beam_energy_eV,
+                                                         convergence_angle_rad, collection_angle_rad)
+        
+        stoichiometry[iAtom] = abundance[iAtom]/abundance[0]
+        iAtom += 1
+
+    return stoichiometry
+            
+            
+        
 def atomic_areal_density_nm2(core_loss_spectra: numpy.ndarray, core_loss_range_eV: numpy.ndarray, background_ranges_eV: numpy.ndarray,
                                 low_loss_spectra: numpy.ndarray, low_loss_range_eV: numpy.ndarray,
                                 atomic_number: int, edge_onset_eV: float, edge_delta_eV: float,
