@@ -5,6 +5,7 @@
 """
 
 import numpy
+#import matplotlib.pyplot as plt
 
 class MultipleCurveFit:
     """A class for performing multiple linear regression on arrays of 1D data (i.e. curves or spectra).
@@ -246,7 +247,7 @@ def signal_from_polynomial_background(data_values: numpy.ndarray, data_x_range: 
 
     # Compile data and x-value arrays over fit ranges for input to the polynomial background fit
     x_origin = data_x_range[0]
-    x_step = (data_x_range[1] - x_origin) / data_values.shape[-1]
+    x_step = (data_x_range[1] - x_origin) / (data_values.shape[-1] - 1) # J. Kas - changed denominator to N-1 to get correct step size.
     data_range_converter = RangeSliceConverter(x_origin, x_step)
     x_values = numpy.arange(x_origin, data_x_range[1], x_step, dtype=numpy.float32)
     next_slice = data_range_converter.get_slice(clean_fit_ranges[0])
@@ -257,22 +258,25 @@ def signal_from_polynomial_background(data_values: numpy.ndarray, data_x_range: 
         x_values_for_fit = numpy.append(x_values_for_fit, x_values[next_slice])
         data_values_for_fit = numpy.append(data_values_for_fit, numpy.maximum(data_values[..., next_slice], 1), axis=-1)
 
+    
     # Generate the requested polynomial fit for the specified fit ranges
     background_fit = PolynomialCurveFit(x_values_for_fit, polynomial_order, fit_log_x)
     background_fit.compute_fit_for_data(data_values_for_fit, fit_log_data)
 
     # Establish the net profile range, i.e. the contiguous union of fit and signal ranges
     profile_range = numpy.zeros_like(signal_x_range)
-    profile_range[0] = min(signal_x_range[0], clean_fit_ranges.min())
-    profile_range[1] = max(signal_x_range[1], clean_fit_ranges.max())
+    # J. Kas - Changed below to reflect input signal range. Not sure why we would want
+    #          to integrate over the full background range as this will increase uncertainties.
+    profile_range[0] = signal_x_range[0] #min(signal_x_range[0], clean_fit_ranges.min())
+    profile_range[1] = signal_x_range[1] #max(signal_x_range[1], clean_fit_ranges.max())
     profile_slice = data_range_converter.get_slice(profile_range)
-
+        
     # Evaluate background model over the net profile range
     background_model = background_fit.evaluate_fit_at(x_values[profile_slice])
 
     # Compute the net signal profile
     signal_profile = data_values[..., profile_slice] - background_model
-
+        
     # Compute the net signal integral over the specified signal range
     profile_range_converter = RangeSliceConverter(profile_range[0], x_step)
     signal_slice = profile_range_converter.get_slice(signal_x_range)
