@@ -274,7 +274,7 @@ def partial_cross_section_nm2(atomic_number: int, shell_number: int, subshell_in
         energy_margin = 10.0 # Chemical shifts can make theoretical edge +/- 10eV of experimental.
         energy_interval_eV = (edge_onset_eV-energy_margin, edge_onset_eV + edge_delta_eV)
         shells = ptable.find_edges_in_energy_interval(energy_interval_eV,atomic_number)
-        assert len(shells) == 0, "No edges for this atom in energy range specified. Atomic #: "  + str(atomic_number)
+        assert len(shells) > 0, "No edges for this atom in energy range specified. Atomic #: "  + str(atomic_number)
 
         energy_step = 0.1  # Set small energy step for now. Adjust later depending on core-hole broadening.
         egrid_eV = numpy.arange(edge_onset_eV, edge_onset_eV + edge_delta_eV, 0.1) # Define energy grid
