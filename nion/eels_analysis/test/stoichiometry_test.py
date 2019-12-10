@@ -1,5 +1,6 @@
 import numpy
 import unittest
+from pathlib import Path
 #from EELS_DataAnalysis import stoichiometry_from_eels
 from nion.eels_analysis import EELS_DataAnalysis 
 from atomic_eels import atomic_diff_cross_section
@@ -7,9 +8,10 @@ from atomic_eels import atomic_diff_cross_section
 
 class TestLibrary(unittest.TestCase):
 
-    def test_stoichiometry(self):
+    def test_stoichiometry_found_from_theoretical_EELS(self):
         # Make BN eels data using FEFF.
         atomic_numbers=[5,7]
+        amps =[1.0,1.0]
         edge_label = 'K'
         beam_energy_keV = 200.0
         convergence_angle_mrad = 1.5
@@ -24,7 +26,7 @@ class TestLibrary(unittest.TestCase):
             #print(atomic_number,edge_label,beam_energy_keV,convergence_angle_mrad,collection_angle_mrad)
             energyDiffSigma,edge_onsets[iEdge] = atomic_diff_cross_section(atomic_number, edge_label, beam_energy_keV,
                                                                            convergence_angle_mrad, collection_angle_mrad, egrid_eV)
-            energyDiffSigma_total = numpy.add(energyDiffSigma_total,energyDiffSigma)
+            energyDiffSigma_total = numpy.add(energyDiffSigma_total,energyDiffSigma*amps[iEdge])
             # set background ranges and offsets, etc.
             background_ranges[iEdge][0] = max(edge_onsets[iEdge]-30.0,0.0)
             background_ranges[iEdge][1] = max(edge_onsets[iEdge]-5.0,0.0)
@@ -48,11 +50,53 @@ class TestLibrary(unittest.TestCase):
                                                 beam_energy_keV*1000.0, convergence_angle_mrad/1000.0, collection_angle_mrad/1000.0)
         
         iAtom = 0
+        print("Stoichiometry from theoretical EELS signal of BN:")
         for atomic_number in atomic_numbers:
-            #print(atomic_number, stoichiometry[iAtom])
-            assert abs(stoichiometry[iAtom]-1.0) < 0.01
+            print(atomic_number, stoichiometry[iAtom])            
+            assert abs(stoichiometry[iAtom]/amps[iAtom]*amps[0]-1.0) < 0.01 # Test stoichiometry found is better than 1%
             iAtom += 1    
 
+
+    def test_stoichiometry_found_from_experimental_eels(self):
+        # Read EELS data from file (BN). This is data from Tracy, taken from a thin part of the sample,
+        # and represents to some extent a best case scenario.
+        #data_file = Path('./Test_Data/eelsdbBN.dat')
+        #data_file = Path('./Test_Data/EELS_Thick.csv')
+        data_file = Path('./Test_Data/EELS_Thin.csv')
+        
+        energy_grid,spectrum = numpy.loadtxt(data_file, delimiter=',',unpack=True)
+        
+        # Set up input to stoichiometry quantification. All settings are hard coded to
+        # BN from the EELS Atlas.
+        atomic_numbers=[5,7]
+        edge_label = 'K'
+        beam_energy_keV = 200.0
+        convergence_angle_mrad = 0.0
+        collection_angle_mrad = 100.0     
+        edge_onsets = [193.8, 402.4]
+        edge_deltas = [30.0, 30.0]
+        background_ranges = [numpy.zeros(2),numpy.zeros(2)]
+        iEdge=0
+        for edge_onset in edge_onsets:
+            background_ranges[iEdge][0] = edge_onset - 30.0
+            background_ranges[iEdge][1] = edge_onset - 10.0
+            iEdge += 1
+            
+        erange = numpy.zeros(2)
+        erange[0] = energy_grid[0]
+        erange[1] = energy_grid[-1]
+        print(background_ranges,erange)
+        stoichiometry = EELS_DataAnalysis.stoichiometry_from_eels(spectrum,erange,background_ranges,atomic_numbers,edge_onsets,edge_deltas,
+                                                beam_energy_keV*1000.0, convergence_angle_mrad/1000.0, collection_angle_mrad/1000.0)
+        
+        iAtom = 0
+        print('Stoichiometry for BN from experimental EELS data from the EELS Atlas:')
+        for atomic_number in atomic_numbers:
+            print(atomic_number, stoichiometry[iAtom])            
+            #assert abs(stoichiometry[iAtom]/amps[iAtom]*amps[0]-1.0) < 0.01 # Test stoichiometry found is better than 1%
+            iAtom += 1
+
+            
 if __name__ == '__main__':
     unittest.main()
 
