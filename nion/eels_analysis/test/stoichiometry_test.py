@@ -136,7 +136,8 @@ class TestLibrary(unittest.TestCase):
     def test_stoichiometry_found_from_experimental_eels(self):
         # Read EELS data from file (BN). This is data from Tracy, taken from a thin part of the sample,
         # and represents to some extent a best case scenario.
-        data_files = [Path('./Test_Data/BN0-0910eV.msa'),Path('./Test_Data/CaCO3.msa'),Path('./Test_Data/CuO.msa')]
+        test_data_dir = Path(__file__).parent / 'Test_Data'
+        data_files = [test_data_dir / 'BN0-0910eV.msa', test_data_dir / 'CaCO3.msa', test_data_dir / 'CuO.msa']
         labels = ['BN', 'CaCO_3','CuO']
         #data_file = Path('./Test_Data/EELS_Thick.csv')
         #data_file = Path('./Test_Data/EELS_Thin.csv')
