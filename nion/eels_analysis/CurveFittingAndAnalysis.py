@@ -5,7 +5,7 @@
 """
 
 import numpy
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 class MultipleCurveFit:
     """A class for performing multiple linear regression on arrays of 1D data (i.e. curves or spectra).
@@ -267,8 +267,8 @@ def signal_from_polynomial_background(data_values: numpy.ndarray, data_x_range: 
     profile_range = numpy.zeros_like(signal_x_range)
     # J. Kas - Changed below to reflect input signal range. Not sure why we would want
     #          to integrate over the full background range as this will increase uncertainties.
-    profile_range[0] = signal_x_range[0] #min(signal_x_range[0], clean_fit_ranges.min())
-    profile_range[1] = signal_x_range[1] #max(signal_x_range[1], clean_fit_ranges.max())
+    profile_range[0] = min(signal_x_range[0], clean_fit_ranges.min())
+    profile_range[1] = max(signal_x_range[1], clean_fit_ranges.max())
     profile_slice = data_range_converter.get_slice(profile_range)
         
     # Evaluate background model over the net profile range
@@ -276,11 +276,14 @@ def signal_from_polynomial_background(data_values: numpy.ndarray, data_x_range: 
 
     # Compute the net signal profile
     signal_profile = data_values[..., profile_slice] - background_model
+    # Also get the total counts on this slice for error analysis.
+    total_profile = data_values[..., profile_slice]
         
     # Compute the net signal integral over the specified signal range
     profile_range_converter = RangeSliceConverter(profile_range[0], x_step)
     signal_slice = profile_range_converter.get_slice(signal_x_range)
     signal_integral = numpy.trapz(signal_profile[..., signal_slice], dx = x_step)
-
-    return signal_integral, signal_profile, background_model, profile_range
+    total_integral  = numpy.trapz(total_profile[..., signal_slice], dx = x_step)
+    
+    return signal_integral, signal_profile, total_integral, background_model, profile_range
 
