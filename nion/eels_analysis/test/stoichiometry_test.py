@@ -43,8 +43,10 @@ class TestLibrary(unittest.TestCase):
         #energyDiffSigma_total = numpy.add(noise,energyDiffSigma_total)
         
         erange = numpy.zeros(2)
+        estep = (egrid_eV[-1] - egrid_eV[0])/(egrid_eV.size - 1)
+        print(estep)
         erange[0] = egrid_eV[0]
-        erange[1] = egrid_eV[-1]
+        erange[1] = egrid_eV[-1] + estep
         
         stoichiometry,error_in_stoichiometry = EELS_DataAnalysis.stoichiometry_from_eels(energyDiffSigma_total,erange,background_ranges,atomic_numbers,edge_onsets,edge_deltas,
                                                 beam_energy_keV*1000.0, convergence_angle_mrad/1000.0, collection_angle_mrad/1000.0)

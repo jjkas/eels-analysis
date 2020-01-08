@@ -59,8 +59,9 @@ def relative_atomic_abundance(core_loss_spectra: numpy.ndarray, core_loss_range_
     # The following should ultimately be pulled out of the edge ID table, based on atomic number and edge onset
     shell_number = 1
     subshell_index = 1
-    cross_section = EELS_CrossSections.partial_cross_section_nm2(atomic_number, shell_number, subshell_index, edge_onset_eV, edge_delta_eV,
+    cross_section_data = EELS_CrossSections.partial_cross_section_nm2(atomic_number, shell_number, subshell_index, edge_onset_eV, edge_delta_eV,
                                                                     beam_energy_eV, convergence_angle_rad, collection_angle_rad)
+    cross_section = cross_section_data #cross_section_data[0]
     atomic_abundance = edge_data[0] / cross_section
     # Now find errors. Assume Poisson error for experimental cross section (S_exp), 10% theoretical errors (s_thy). Then error in relative atomic abundance is
     # S = atomic_abundance*\sqrt[ (S_exp/cross_exp)^2 + (S_thy/cross_thy)^2 ]
@@ -78,8 +79,12 @@ def stoichiometry_from_eels(eels_spectrum: numpy.ndarray, eels_range_eV: numpy.n
 
     Returns:
         stoichiometries - relative to first atom in list.
-        calculated cross sections - in nm^2.
         error_in_stoichiometry - combined theoretical/experimental errors.
+        -- Below for future output:
+        calculated cross sections - in nm^2 for each edge.
+        core-loss signal for each edge
+        background for each edge
+        calculated differential cross section for each edge.
     """
     # For now assert that the number of atomic species, background_ranges, edge_onsets, edge_deltas are equal. This assumes that each
     # edge range only contains signal from one atomic species.

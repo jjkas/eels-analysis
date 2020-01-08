@@ -5,7 +5,6 @@
 """
 
 import numpy
-import matplotlib.pyplot as plt
 
 class MultipleCurveFit:
     """A class for performing multiple linear regression on arrays of 1D data (i.e. curves or spectra).
@@ -213,6 +212,7 @@ def signal_from_polynomial_background(data_values: numpy.ndarray, data_x_range: 
     Returns:
         signal_integral - net signal integral array after subtraction of background fit over the specified signal range
         signal_profile - net signal profile array after subtraction of background fit over the profile range (see below)
+        total_integral - total integral including signal and background over signal range.
         background_model - background fit profile array over the profile range (see below)
         profile_range - contiguous union of signal and background fit ranges
     """
@@ -247,7 +247,11 @@ def signal_from_polynomial_background(data_values: numpy.ndarray, data_x_range: 
 
     # Compile data and x-value arrays over fit ranges for input to the polynomial background fit
     x_origin = data_x_range[0]
-    x_step = (data_x_range[1] - x_origin) / (data_values.shape[-1] - 1) # J. Kas - changed denominator to N-1 to get correct step size.
+    x_step = (data_x_range[1] - x_origin) / data_values.shape[-1] # J. Kas - changed denominator back to N to
+                                                                  # match the definition in comments at top.
+                                                                  # This means we have to be careful not to
+                                                                  # pass the actual range of an x-coordinate array,
+                                                                  # but the range plus the step size.
     data_range_converter = RangeSliceConverter(x_origin, x_step)
     x_values = numpy.arange(x_origin, data_x_range[1], x_step, dtype=numpy.float32)
     next_slice = data_range_converter.get_slice(clean_fit_ranges[0])
