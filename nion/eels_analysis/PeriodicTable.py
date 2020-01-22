@@ -110,8 +110,29 @@ class PeriodicTable(metaclass=Singleton):
                 return list((edge_map[key][0], edge_map[key][0].to_long_str()) for key in sorted(edge_map.keys()))
         return None
 
-    def find_edges_in_energy_interval(self, energy_interval_ev: typing.Tuple[float, float], atomic_number_in: int = None) -> typing.List[ElectronShell]:
-        """Return list of electron shells found within energy interval, sorted by distance from center."""
+    def find_edges_in_energy_interval(self, energy_interval_ev: typing.Tuple[float, float]) -> typing.List[ElectronShell]:
+        """Return set of edges of interest to users found within the energy interval, where edges of interest are defined
+           the lowest energy edge of the set of edges with the same principle quantum number."""
+        edges = list()  # typing.List[typing.Tuple[float, ElectronShell]]
+        energy_interval_center_ev = (energy_interval_ev[0] + energy_interval_ev[1]) * 0.5
+        for edge_data_item in self.__edge_data:
+            atomic_number = edge_data_item.get("z", 0)
+            edge_dict = edge_data_item.get("edges", dict())
+            # find lowest energy edge within each shell
+            edge_map = dict()
+            for eels_shell, energy in edge_dict.items():
+                electron_shell = ElectronShell.from_eels_notation(atomic_number, eels_shell)
+                base_electron_shell = edge_map.setdefault(electron_shell.shell_number, (None, 1E9))
+                if energy < base_electron_shell[1]:
+                    edge_map[electron_shell.shell_number] = (electron_shell, energy)
+            for electron_shell, energy in edge_map.values():
+                if energy_interval_ev[0] <= energy <= energy_interval_ev[1]:
+                    edges.append((abs(energy_interval_center_ev - energy), electron_shell))
+        edges.sort(key=operator.itemgetter(0))
+        return [edge[1] for edge in edges]
+    
+    def find_all_edges_in_energy_interval(self, energy_interval_ev: typing.Tuple[float, float], atomic_number_in: int = None) -> typing.List[ElectronShell]:
+        """Return complete list of edges found within energy interval, sorted by energy."""
         # J. Kas - Added optional atomic number so that we can use this function to find all edges from a single atomic species.
         edges = list()  # typing.List[typing.Tuple[float, ElectronShell]]
         energy_interval_center_ev = (energy_interval_ev[0] + energy_interval_ev[1]) * 0.5
