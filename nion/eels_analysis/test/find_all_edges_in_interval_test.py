@@ -28,7 +28,7 @@ class TestLibrary(unittest.TestCase):
     def test_find_edges_in_interval(self):
         # This test fails in the old version of find_energies_in_interval. Finds only Ti L3 edge.
         ptable=PeriodicTable.PeriodicTable()
-        edges=ptable.find_edges_in_energy_interval((450.0,470.0))
+        edges=ptable.find_all_edges_in_energy_interval((450.0,470.0))
         # In this interval there should be 7 edges: Ti L2, Ti L3, Nb M1, Ru M3, In M4, Ta N2, and Bi N4
         assert len(edges) == 7
         atomic_numbers = {edge.atomic_number for edge in edges}
@@ -45,7 +45,7 @@ class TestLibrary(unittest.TestCase):
     def test_find_edges_in_interval_single_atom(self):
         # This tests the new functionality, which allows for filtering by a single atom.
         ptable=PeriodicTable.PeriodicTable()
-        edges=ptable.find_edges_in_energy_interval((450.0,470.0),22)
+        edges=ptable.find_all_edges_in_energy_interval((450.0,470.0),22)
         # In this interval there should be 7 edges: Ti L2, Ti L3, Nb M1, Ru M3, In M4, Ta N2, and Bi N4
         assert len(edges) == 2
         atomic_numbers = {edge.atomic_number for edge in edges}
