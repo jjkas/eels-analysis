@@ -42,6 +42,23 @@ class TestLibrary(unittest.TestCase):
         binding_energies = {ptable.nominal_binding_energy_ev(edge) for edge in edges}
         assert binding_energies == {453.8, 460.2, 466.6, 461.4, 451.4, 463.4, 464.0}
         
+    def test_find_edges_in_interval_single_atom(self):
+        # This tests the new functionality, which allows for filtering by a single atom.
+        ptable=PeriodicTable.PeriodicTable()
+        edges=ptable.find_edges_in_energy_interval((450.0,470.0),22)
+        # In this interval there should be 7 edges: Ti L2, Ti L3, Nb M1, Ru M3, In M4, Ta N2, and Bi N4
+        assert len(edges) == 2
+        atomic_numbers = {edge.atomic_number for edge in edges}
+        assert atomic_numbers == {22}
+        shell_numbers = {edge.shell_number for edge in edges}
+        assert shell_numbers == {2}
+        subshell_indices = {edge.subshell_index for edge in edges}
+        assert subshell_indices == {2, 3}
+        shell_strings = {edge.get_shell_str_in_eels_notation(True) for edge in edges}
+        assert shell_strings == {"L2", "L3"}
+        binding_energies = {ptable.nominal_binding_energy_ev(edge) for edge in edges}
+        assert binding_energies == {453.8, 460.2}
+
 if __name__ == '__main__':
     unittest.main()
 
