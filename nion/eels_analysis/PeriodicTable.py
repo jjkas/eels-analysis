@@ -61,15 +61,14 @@ class ElectronShell:
 
     @property
     def subshell_label(self) -> str:
-        # J. Kas - Deleted 'a' from zeroth index since azimuthal_quantum_number
-        #          runs from 0 (s-states) to 4 (f-states).
-        subshell_labels = ('s','p','d', 'f', 'g', 'h', 'i', 'j') # J. Kas - Seems the p was left out.
+        # azimuthal_quantum_number runs from 0 (s-states) to 4 (f-states).
+        subshell_labels = ('s', 'p', 'd', 'f', 'g', 'h', 'i', 'j')
         return subshell_labels[self.azimuthal_quantum_number]
 
     @property
     def spin_fraction(self) -> fractions.Fraction:
+        # subshell_index runs from 1 (s-states) to 7 (f-states).
         spins = (None, 1, 1, 3, 3, 5, 5, 7, 7, 9)
-        # J. Kas - changed self.azimuthal_quantum_number to self.subshell_index
         return fractions.Fraction(spins[self.subshell_index], 2)
 
 
@@ -89,15 +88,12 @@ class PeriodicTable(metaclass=Singleton):
                 return edge_data_item.get("edges", dict()).get(electron_shell.get_shell_str_in_eels_notation(True))
         return None
 
-    def get_elements_list(self) -> typing.Tuple[typing.Tuple[int,str],...]:
+    def get_elements_list(self) -> typing.Tuple[int, str]:
         """Return a list of tuples: atomic number, atomic symbol."""
-        # J. Kas - changed output type to tuple of tuples, since that's what it is. Also change the for loop below to
-        # define a list, which is then used to create the output tuple. Otherwise generator function error is thrown.
-        return tuple([(edge_data_item.get("z"), edge_data_item.get("symbol")) for edge_data_item in self.__edge_data])
+        return ((edge_data_item.get("z"), edge_data_item.get("symbol")) for edge_data_item in self.__edge_data)
 
-    def get_edges_list(self, atomic_number: int) -> typing.List[typing.Tuple[ElectronShell, str]]:
+    def get_edges_list(self, atomic_number: int) -> typing.Tuple[ElectronShell, str]:
         """Return a list of tuples: electron shell (lowest energy within shell number), edge name (without subshell)."""
-        # J. Kas - Changed output typing to a list of tuples.
         for edge_data_item in self.__edge_data:
             if edge_data_item.get("z", 0) == atomic_number:
                 edge_dict = edge_data_item.get("edges", dict())
@@ -111,8 +107,7 @@ class PeriodicTable(metaclass=Singleton):
         return None
 
     def find_edges_in_energy_interval(self, energy_interval_ev: typing.Tuple[float, float]) -> typing.List[ElectronShell]:
-        """Return set of edges of interest to users found within the energy interval, where edges of interest are defined
-           the lowest energy edge of the set of edges with the same principle quantum number."""
+        """Return list of electron shells found within energy interval, sorted by distance from center."""
         edges = list()  # typing.List[typing.Tuple[float, ElectronShell]]
         energy_interval_center_ev = (energy_interval_ev[0] + energy_interval_ev[1]) * 0.5
         for edge_data_item in self.__edge_data:
@@ -129,39 +124,6 @@ class PeriodicTable(metaclass=Singleton):
                 if energy_interval_ev[0] <= energy <= energy_interval_ev[1]:
                     edges.append((abs(energy_interval_center_ev - energy), electron_shell))
         edges.sort(key=operator.itemgetter(0))
-        return [edge[1] for edge in edges]
-    
-    def find_all_edges_in_energy_interval(self, energy_interval_ev: typing.Tuple[float, float], atomic_number_in: int = None) -> typing.List[ElectronShell]:
-        """Return complete list of edges found within energy interval, sorted by energy."""
-        # J. Kas - Added optional atomic number so that we can use this function to find all edges from a single atomic species.
-        edges = list()  # typing.List[typing.Tuple[float, ElectronShell]]
-        energy_interval_center_ev = (energy_interval_ev[0] + energy_interval_ev[1]) * 0.5
-        # J. Kas - Only sift through one atomic_species if atomic_number_in is specified.
-        if atomic_number_in is not None:
-            edge_data = [self.__edge_data[atomic_number_in - 1]]
-        else:
-            edge_data = self.__edge_data
-            
-        for edge_data_item in edge_data:
-            atomic_number = edge_data_item.get("z", 0)
-            if atomic_number == atomic_number_in or atomic_number_in is None:
-                edge_dict = edge_data_item.get("edges", dict())
-                
-                # find lowest energy edge within each shell
-                # J. Kas - Not sure why the above was necessary. It wasn't working anyway, so now we are just
-                #          creating a list of all shells within the energy range.
-
-                # J. Kas - Loop over shells
-                for eels_shell, energy in edge_dict.items():
-                    electron_shell = ElectronShell.from_eels_notation(atomic_number, eels_shell)                    
-                                 
-                    # J. Kas - If energy of edge is withing range, add the shell to the list. 
-                    if energy_interval_ev[0] <= energy <= energy_interval_ev[1]:
-                        edges.append((energy, electron_shell))
-
-                    edges.sort(key=operator.itemgetter(0))
-        #for edge in edges:
-        #    print(edge[1].subshell_index,edge[1].get_shell_str_in_eels_notation(include_subshell=True))
         return [edge[1] for edge in edges]
 
 
