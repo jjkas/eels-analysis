@@ -76,6 +76,11 @@ class PeriodicTable(metaclass=Singleton):
     def __init__(self):
         self.__edge_data = json.loads(pkgutil.get_data(__name__, "resources/edges.json"))
 
+    def print_edge_data(self):
+        # For debugging purposes
+        print(self.__edge_data)
+        return
+        
     def element_symbol(self, atomic_number: int) -> str:
         for edge_data_item in self.__edge_data:
             if edge_data_item.get("z", 0) == atomic_number:
@@ -125,6 +130,19 @@ class PeriodicTable(metaclass=Singleton):
                     edges.append((abs(energy_interval_center_ev - energy), electron_shell))
         edges.sort(key=operator.itemgetter(0))
         return [edge[1] for edge in edges]
+
+    def find_elements_in_energy_interval(self, energy_interval_ev: typing.Tuple[float, float]) -> List:
+        """Return a list of tuples, (atomic_number, edge_dict), with all elements that have edges within the energy range.""" 
+        element_data = list()  # typing.List[typing.Tuple[float, ElectronShell]]
+        # Loop over edge_data and select atomic number and edges that are associated with each.
+        for edge_data_item in self.__edge_data:
+            edge_dict = edge_data_item.get("edges", dict())
+            # Check if any of the edges lie within the energy range
+            if any(edge_dict.get("edges").values() >= energy_interval_ev[0]) and any(edge_dict['edges'].values() <= energy_interval_ev[1]):
+                atomic_number = edge_data_item.get("z", 0)
+                element_data.append((atomic_number,edge_dict))
+                
+        return element_data
 
 
 
