@@ -8,7 +8,7 @@
 import numpy
 import scipy.signal
 import math
-import matplotlib.pyplot as plt 
+
 
 # local libraries
 from . import CurveFittingAndAnalysis
@@ -147,12 +147,8 @@ def find_experimental_edge_energies(eels_spectrum: numpy.ndarray, energy_range_e
         first_derivative=first_derivative_avg
     
         if False: # Meant for debugging only.
-            #plt.plot(energies_search, eels_spectrum_search, label='eels')
-            #plt.plot(energies_search, second_derivative+d, label='2nd')
             plt.plot(energies_search, first_derivative, label='1st')
             plt.plot(energies_search, corr_coeff_array, label='corr')
-            #plt.plot(energies_search, der_corr, label='der corr')
-            #plt.plot(energies_search, q_factor+5*d, label='Q')
             plt.legend(loc="upper left")
             plt.show()
         
@@ -267,6 +263,7 @@ def find_experimental_edge_energies(eels_spectrum: numpy.ndarray, energy_range_e
                 edge_energies_minor = numpy.append(edge_energies_minor,edge_energies2[ind])
 
     if debug_plotting: # For debugging purposes.
+        import matplotlib.pyplot as plt 
         plt.stem(edge_energies2,q_factors2,linefmt='C2-',markerfmt='o',label='qf2')
         plt.yscale('log')
         if q_factors_major.size >= 1:

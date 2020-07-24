@@ -7,10 +7,10 @@ import os
 import random
 import sys
 import unittest
-import numpy
-import glob
-import pandas
-import matplotlib.pyplot as plt
+# The below are for more extensive testing of all eels atlas data.
+# import glob
+# import pandas 
+# import matplotlib.pyplot as plt
 
 # niondata must be available as a module.
 # it can be added using something similar to
@@ -36,15 +36,21 @@ class TestEELSAnalysisFunctions(unittest.TestCase):
 
 
     def test_find_experimental_edge_energies_with_defaults(self):
+        # Tests the function without any optional parameters.s
         file_name = os.path.join('Test_Data','DectrisSI.csv')
 
+        # Load data from file
         energies, eels_spectrum = numpy.loadtxt(file_name, delimiter=',',unpack=True)
+
+        # Set energy range (goes from first energy to last energy + step
         energy_step = (energies[-1] - energies[0])/energies.size
         energy_range_ev = numpy.array([energies[0],energies[-1]+energy_step])
 
-        print("Do initial analysis.") 
-        # First set sensitivity to 1.0, this will find many edges.
-        edge_energies,q_factors = EELS_DataAnalysis.find_experimental_edge_energies(eels_spectrum, energy_range_ev, debug_plotting=True)
+        # Find edges in the spectrum.
+        edge_energies,q_factors = EELS_DataAnalysis.find_experimental_edge_energies(eels_spectrum, energy_range_ev, debug_plotting=False)
+
+        # Print edges found, and edges found by visual inspection for comparison. 
+        # The edge finder will not find all edges necessarily, and might find extra edges.
         print("Number of edges found = ", edge_energies.size)
         print("Edges found:")
         print(numpy.sort(edge_energies).astype(int))
@@ -161,7 +167,9 @@ class TestEELSAnalysisFunctions(unittest.TestCase):
         outF.close()
 
     def test_find_experimental_edge_energies_re_analyze_false(self):
-
+        # Test the keywork re_analyze. The function keeps all edge data from the previous analysis. If re_analyze = False,
+        # the function will only change the filtering options to select more or less edges. The filtering should be very
+        # fast.
         file_name = os.path.join('Test_Data','DectrisSI.csv')
         
         energies, eels_spectrum = numpy.loadtxt(file_name, delimiter=',',unpack=True)
@@ -186,6 +194,7 @@ class TestEELSAnalysisFunctions(unittest.TestCase):
         print('Done')
 
     def test_find_experimental_edge_energies_sensitivity(self):
+        # Test changes to the sensitivity, which will include less poles as it decreases from 1 to 0. 
         file_name = os.path.join('Test_Data','DectrisSI.csv')
 
         energies, eels_spectrum = numpy.loadtxt(file_name, delimiter=',',unpack=True)
@@ -197,15 +206,15 @@ class TestEELSAnalysisFunctions(unittest.TestCase):
         edge_energies,q_factors = EELS_DataAnalysis.find_experimental_edge_energies(eels_spectrum, energy_range_ev,correlation_cutoff_scale=0.0, debug_plotting=False)
         print("Number of edges found = ", edge_energies.size)
 
-        sens=1.0
-        # Now change sensitivity parameter from 1 to zero in steps of 0.1
+        scale=0.0
+        # Now change sensitivity parameter from 0 to 1 in steps of 0.1. Number of edges should go from 1 to some max depending on the data and the parameters used (in this case it is 14). 
         print("Start 10 iterations with vaying sensitivity.") 
-        while sens >= 0.0:
-            edge_energies,q_factors = EELS_DataAnalysis.find_experimental_edge_energies(eels_spectrum, energy_range_ev,re_analyze=False,correlation_cutoff_scale=sens,debug_plotting=False)
-            print("Sensitivity: ", sens)
+        while scale <= 1.0:
+            edge_energies,q_factors = EELS_DataAnalysis.find_experimental_edge_energies(eels_spectrum, energy_range_ev,re_analyze=False,correlation_cutoff_scale=scale,debug_plotting=False)
+            print("Sensitivity: ", 1.0-scale)
             print("Number of edges found = ", edge_energies.size)
             print(" ")
-            sens = sens - 0.1
+            scale = scale + 0.1
 
 if __name__ == '__main__':
     unittest.main()
