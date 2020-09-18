@@ -8,14 +8,143 @@
 import numpy
 import scipy.signal
 import math
-
+# The following is a library that allows range dictionaries through the RangeDict object.
+import ranges
 
 # local libraries
-from . import CurveFittingAndAnalysis
-from . import EELS_CrossSections
+from nion.eels_analysis import CurveFittingAndAnalysis
+from nion.eels_analysis import EELS_CrossSections
+from nion.eels_analysis import PeriodicTable
 
 __experimental_edge_data = (None, None)
 
+def find_species_from_experimental_edge_data(eels_spectrum: numpy.ndarray, energy_range_ev: numpy.ndarray, experimental_edge_data, search_range_ev, **kwargs) -> list:
+    """Find chemical species associated with edge energy data produced by find_experimental_edge_energies along with spectrum.
+       
+    Input:
+        eels_spectrum    - array of spectral data
+        energy_range_ev  - 2 element array containing energy range. First element is energy associated with start of
+                           spectral element, second element is end of last spectral element, i.e. = # of elements * energy_step 
+        experimental_edge_data - tuple that contains numpy array of edge_energies and array of quality factor.
+        **kwargs         - Options for controling the algorithm
+    """
+    # Sanity checks
+    # Make sure eels_spectrum holds data (probably should be > 10 or 20 or something, but I'll put 1 for now.
+    assert eels_spectrum.shape[-1] > 1
+
+    # Check energy range is sensible
+    assert energy_range_ev[1] > energy_range_ev[0]
+    assert energy_range_ev[1] > 0
+    assert search_range_ev[1] > search_range_ev[0]
+    assert search_range_ev[0] > 0
+    search_range_ev[0] = max(search_range_ev[0],energy_range_ev[0])
+    search_range_ev[1] = min(search_range_ev[1],energy_range_ev[1])
+    
+    # Check that experimental edge data is sensible and has the right structure. experimental edge data should be tuple that holds
+    # (edge_energies, quality_factor).
+    assert len(experimental_edge_data) == 2
+
+    # Check that the tuple holds arrays with the same shape.
+    assert experimental_edge_data[0].shape == experimental_edge_data[1].shape
+
+    # Check that experimental edge energies are within the energy range (maybe we want to allow for any rather than forcing all)
+    assert numpy.all(experimental_edge_data[0] >= energy_range_ev[0])
+    assert numpy.all(experimental_edge_data[0] <= energy_range_ev[1])
+
+    only_major_edges = kwargs.get('only_major_edges',True)
+    element_list = kwargs.get('element_list', [])
+    # Designation of major edges - only including up to 5000 eV.
+    #major_edges = ['K','L2','L23','L3','M4','M45','M5','N4','N45','N5','N6','N67','N7','O4','O45','O5']
+    # Reduced only includes first of series, e.g., L3 if L2,L3.
+    major_edges_reduced = ranges.RangeDict({ranges.Range(1,10):('K'),
+                                            ranges.Range(10,18):('K','L23', 'L3'),
+                                            ranges.Range(18,23):('K','L23','L3','M23','M3'),
+                                            ranges.Range(23,29):('L23','L3','M23','M3'),
+                                            ranges.Range(29,32):('L23','L3'),
+                                            ranges.Range(32,36):('L23','L3','M45','M5'),
+                                            ranges.Range(36,47):('L23','L3','M45','M5','N23','N3'),
+                                            ranges.Range(47,50):('L23','L3','M45','M5'),
+                                            ranges.Range(50,54):('L23','L3','M45','M5','N45','N5'),
+                                            ranges.Range(54,56):('M45','M5','N45','N5'),
+                                            ranges.Range(56,72):('M45','M5','N45','N5','O23','O3'),
+                                            ranges.Range(72,78):('M45','M5','O23','O3'),
+                                            ranges.Range(78,82):('M45','M5'),
+                                            ranges.Range(82,84):('M45','M5','O45','O5'),
+                                            ranges.Range(84,85):('M45','M5'),
+                                            ranges.Range(90,93):('M45','M5','N67','N7','O45','O5')
+                                            })
+    # Start by looping through experimental edge energies and finding all tabulated electron shells that have edges near this.
+    # Edge energies are ordered by quality factor from largest to smallest, so most important edges will be checked first.
+    ptable = PeriodicTable.PeriodicTable()
+    i_edge = 0
+    element_data = {}
+    for edge_energy in experimental_edge_data[0]:
+        q_factor = experimental_edge_data[1][i_edge]
+        # Set energy range to look for other edges. For now do +/- max of 3% or 10eV.
+        max_energy_diff = max(0.03*edge_energy,10.0)
+        energy_range = [edge_energy-max_energy_diff,edge_energy+max_energy_diff]
+        # Create a dictionary of all elements that might be in this system.
+        element_data.update(ptable.find_elements_in_energy_interval(energy_range))
+
+
+    # We now have a list of elements that have an edge in the region associated with the edge found in the experiment. The element data
+    # includes the atomic number, and a list of all edges (label, energy).
+    # Now loop through elements and search for edges that match those in the experiment. Count how many matches there
+    # are for each element, and store the difference between the energy for that element and that for the experimental edge.
+    # Count only the closest edge for each element for each experimental edge.
+    # Loop through atoms
+    atom_data = []
+    i_atom = 0
+    for atom,edges in element_data.items():
+        if not element_list or int(atom) in element_list:
+            # Get major edges for this element that lie withing the range of the experimental data.
+            major_edges_for_this_atom = []
+            for edge_label,energy in edges.items():
+                if int(atom) in major_edges_reduced:
+                    if edge_label in major_edges_reduced[int(atom)] and (search_range_ev[0] < energy < search_range_ev[1]):
+                        major_edges_for_this_atom = major_edges_for_this_atom + [edge_label]
+                    
+            # Loop through experimental edges, and find best one for this edge if it exists.
+            # Number of edges matched will be one measure of the probability that an element exists in this spectrum.
+            number_edges_matched = 0
+            has_edge = False
+            missing_major_edge = False
+            for exp_edge_energy in experimental_edge_data[0]:
+                # Loop through edges for this atom. For each experimental edge, there should
+                # be a max of one match per atom.
+                min_diff = max(exp_edge_energy*0.03,15.0) 
+                best_edge_name = None
+                for edge_name,energy in edges.items():
+                    if (not only_major_edges) or (edge_name in major_edges_for_this_atom):
+                        diff = numpy.absolute(energy-exp_edge_energy)
+                        if diff <= min_diff:
+                            best_edge_for_this_exp_edge = energy
+                            best_edge_name = edge_name
+                            min_diff = diff
+                            has_edge = True
+
+                if best_edge_name:
+                    number_edges_matched += 1
+                    if len(atom_data) - 1 < i_atom:
+                        atom_data = atom_data + [[int(atom)]]
+                        atom_data[i_atom] = atom_data[i_atom] + [best_edge_name,best_edge_for_this_exp_edge,exp_edge_energy]
+                    else:
+                        atom_data[i_atom] = atom_data[i_atom] + [best_edge_name,best_edge_for_this_exp_edge,exp_edge_energy]
+                    
+                    if best_edge_name in major_edges_for_this_atom:
+                        major_edges_for_this_atom.remove(best_edge_name)
+
+            if has_edge:
+                if True: #if len(major_edges_for_this_atom) == 0:
+                    atom_data[i_atom].insert(1,number_edges_matched)
+                    i_atom += 1
+                else:
+                    del atom_data[i_atom]
+
+
+    return atom_data
+    
+    
 def find_experimental_edge_energies(eels_spectrum: numpy.ndarray, energy_range_ev: numpy.ndarray,
                                     search_range_ev: numpy.ndarray = None, **kwargs) -> numpy.ndarray:
     """Find energies where edges are located in experimental eels spectrum.
@@ -45,7 +174,7 @@ def find_experimental_edge_energies(eels_spectrum: numpy.ndarray, energy_range_e
         search_range_ev = numpy.array([max(energy_range_ev[0],30.0), energy_range_ev[-1]])
     else:
         # Check that search range contains a non-zero portion of energy range.
-        assert (search_range_ev[-1] > energy_range_ev[0]) and (search_range_ev[0] < energy_range_ev[-1])
+        assert (search_range_ev[1] > energy_range_ev[0]) and (search_range_ev[0] < energy_range_ev[1])
         
         # Set search range to allowable values.
         search_range_ev = numpy.array([max(search_range_ev[0],energy_range_ev[0]), min(search_range_ev[1],energy_range_ev[-1])])
@@ -90,7 +219,7 @@ def find_experimental_edge_energies(eels_spectrum: numpy.ndarray, energy_range_e
             
         # Set energy range for calculating the correlation coefficient. A smaller energy range will be more
         # susceptible to noise, while a larger energy range will only be sensitive to changes the persist over
-        # a larger energy range. Default to the min of 25eV or 1/10th the search range. 
+        # a larger energy range. Default to the min of 25eV or 1/10th the search range.
         correlation_energy_range = min(kwargs.get("correlation_energy_range_ev",max(50.0*sensitivity_parameter,5*energy_step)),(emax_search-emin_search)/10.0)
         i_start = -1
         i_end = -1
@@ -119,13 +248,13 @@ def find_experimental_edge_energies(eels_spectrum: numpy.ndarray, energy_range_e
         # Now smooth first derivative via simple local averaging, then subtract off longer range local average.
         # Right now these are hard coded number of points average, but they should be set by keyword arguments
         # and defaults.
-        num_avg=kwargs.get('derivative_smoothing',4)
+        num_avg=kwargs.get('derivative_smoothing',2)
     
         # Also average over a longer range only extending below the current point. This will give some measure of the average derivative of the background.
-        num_lr_avg=num_avg*4
+        num_lr_avg=max(num_avg*4,16)
         first_derivative_avg = numpy.zeros(first_derivative.shape[-1])
         first_derivative_long_range_avg = numpy.zeros(first_derivative.shape[-1])
-
+        
         for i,fd in enumerate(first_derivative):
             if (i-num_avg >= 0) and (i+num_avg <= first_derivative.shape[-1] - 1):
                 first_derivative_avg[i] = numpy.average(first_derivative[i-num_avg:i+num_avg])
@@ -141,13 +270,25 @@ def find_experimental_edge_energies(eels_spectrum: numpy.ndarray, energy_range_e
             
             # Subtract the background derivative from the derivative
             first_derivative_avg[i] = (first_derivative_avg[i] - first_derivative_long_range_avg[i])/numpy.sqrt(eels_spectrum_search[i]) if eels_spectrum_search[i]>0 else 0.0 
-        
 
-
-        first_derivative=first_derivative_avg
-    
-        if False: # Meant for debugging only.
+        import copy
+        first_derivative3 = copy.deepcopy(first_derivative_avg)
+        num_avg=2*kwargs.get('derivative_smoothing',2)
+        num_lr_avg=2*max(num_avg*2,16)
+        cumsum_vec = numpy.cumsum(first_derivative) 
+        first_derivative_avg = (cumsum_vec[num_avg:] - cumsum_vec[:-num_avg]) / num_avg
+        first_derivative_long_range_avg = (cumsum_vec[num_lr_avg:] - cumsum_vec[:-num_lr_avg]) / num_lr_avg
+        first_derivative2 = first_derivative[:]
+        first_derivative2[int(num_lr_avg/2):-int(num_lr_avg/2)]=(first_derivative_avg[int((num_lr_avg-num_avg)/2):-int((num_lr_avg-num_avg)/2)] - first_derivative_long_range_avg)
+        first_derivative2[0:int(num_lr_avg/2-1)] = 0.0
+        first_derivative2[-int(num_lr_avg/2+1):-1] = 0.0
+        first_derivative2 = first_derivative2/numpy.sqrt(eels_spectrum_search)
+        first_derivative = first_derivative2[:]
+        if debug_plotting: # Meant for debugging only.
+            import matplotlib.pyplot as plt 
+            plt.plot(energies_search, eels_spectrum_search/numpy.amax(eels_spectrum_search))
             plt.plot(energies_search, first_derivative, label='1st')
+            plt.plot(energies_search, first_derivative2, label='1st 2')
             plt.plot(energies_search, corr_coeff_array, label='corr')
             plt.legend(loc="upper left")
             plt.show()
@@ -175,8 +316,8 @@ def find_experimental_edge_energies(eels_spectrum: numpy.ndarray, energy_range_e
             if ind != ind_max_corr[0][0]:
                 # If this is not the first max, set emin and emax to define energy range to look for maxima in the
                 # first derivative.
-                # emin is the energy of the previous maximum in the correlation coefficient.
-                emin = emax
+                # emin is the larger of the previous edge energy, and emax - correlation_energy_range
+                emin = max(emax,energies_search[ind]-correlation_energy_range)
                 # emax is the energy of the current maximum in the correlation coefficient.
                 emax = energies_search[ind]
             else:
@@ -191,23 +332,22 @@ def find_experimental_edge_energies(eels_spectrum: numpy.ndarray, energy_range_e
             # If there are no maxima in the first derivative in this region, discount this point
             if first_derivative_in_region.size > 0:
                 # Find the index of the maximum in first derivative in the region, and the corresponding maximum value.
-                ind_max_first_in_region = numpy.argmax(first_derivative_in_region)
-                max_first_in_region = first_derivative_in_region[ind_max_first_in_region]
+                for ind_max_first_in_region,max_first_in_region in enumerate(first_derivative_in_region):
+                    #max_first_in_region = first_derivative_in_region[ind_max_first_in_region]
 
-                # Define the edge energy as that where the maximum in first derivative occurs.
-                edge_energy = energies_in_region[ind_max_first_in_region]
-
-                if True:
-                    # Define a quality factor equal to max in first derivative times max in correlation coefficient. 
-                    if (edge_energies2.size == 0):
-                        edge_energies2 = numpy.append(edge_energies2,edge_energy)
-                        q_factors2 = numpy.append(q_factors2, max_first_in_region*corr_coeff_array[ind])
-                    else:
-                        if edge_energies2[-1] != edge_energy:
+                    # Define the edge energy as that where the maximum in first derivative occurs.
+                    edge_energy = energies_in_region[ind_max_first_in_region]
+                    if max_first_in_region > 0:
+                        # Define a quality factor equal to max in first derivative times max in correlation coefficient. 
+                        if (edge_energies2.size == 0):
                             edge_energies2 = numpy.append(edge_energies2,edge_energy)
                             q_factors2 = numpy.append(q_factors2, max_first_in_region*corr_coeff_array[ind])
                         else:
-                            q_factors2[-1] = max(max_first_in_region*corr_coeff_array[ind],q_factors2[-1])
+                            if edge_energies2[-1] != edge_energy:
+                                edge_energies2 = numpy.append(edge_energies2,edge_energy)
+                                q_factors2 = numpy.append(q_factors2, max_first_in_region*corr_coeff_array[ind])
+                            else:
+                                q_factors2[-1] = max(max_first_in_region*corr_coeff_array[ind],q_factors2[-1])
 
     else:
         q_factors2 = __experimental_edge_data[1]
@@ -218,13 +358,13 @@ def find_experimental_edge_energies(eels_spectrum: numpy.ndarray, energy_range_e
     
     # We will take only first edge found after each maximum in the corr_coeff_array - edge_separation_energy.
     # Default is 7.5eV, minimum is 2*energy step. Multiply edge_separation parameter by edge energy.
-    edge_separation_energy = kwargs.get('edge_separation_parameter',10.0*sensitivity_parameter/100.0)
+    edge_separation_energy = kwargs.get('edge_separation_parameter',sensitivity_parameter/50.0)
 
     # Define a deviation. This isn't perfect, but it's close enough. Most edges are way above the median deviation.
     
     median = numpy.median(q_factors2)
     sigma0 = scipy.stats.median_absolute_deviation(q_factors2)
-    sigma = scipy.stats.median_absolute_deviation(q_factors2[abs(q_factors2-median) < 3.0*sigma0])
+    sigma = sigma0 #scipy.stats.median_absolute_deviation(q_factors2[abs(q_factors2-median) < 3.0*sigma0])
     cut= median + sigma*7.0
     cutbig= 0.0 #cut #median + sigma*20.0
     #edge_energies_final = numpy.array([])
@@ -236,23 +376,40 @@ def find_experimental_edge_energies(eels_spectrum: numpy.ndarray, energy_range_e
     #part_of_last_edge = False
     denom = sigma
     max_qf = max(q_factors2)
-    correlation_cutoff_scale = max_qf*max(min(kwargs.get('correlation_cutoff_scale',sensitivity_parameter),1.0),0.0)**6/denom
-
-    min_corr_major = correlation_cutoff_scale
+    cutoff_scale = max(min(kwargs.get('cutoff_scale',sensitivity_parameter*2.0),10.0),0.0)
+    q_factors2 = q_factors2/denom
+    min_corr_major = cutoff_scale
     min_corr_minor = 0.0 #min_corr_major/5.0
+    qfmax=10.0*cutoff_scale
     for ind,qfac in enumerate(q_factors2):
         # get standard deviation of nearby q_factors to normalize quality factor
         #denom=numpy.std(numpy.abs(q_factors2[max(ind-5,0):max(ind-1,2)]))
         #denom = 1.0
-        if (qfac/denom > min_corr_major):
+        if (qfac > 6.0*cutoff_scale): #min_corr_major):
             if edge_energies_major.shape[-1] > 0:
-                if (edge_energies2[ind] - edge_energies_major[-1] > edge_separation_energy*edge_energies2[ind]): 
-                    q_factors_major = numpy.append(q_factors_major,qfac/denom)
+                if (edge_energies2[ind] - edge_energies_major[-1] > min(max(edge_separation_energy*edge_energies2[ind],10.0),50.0)):
+                    qfm = qfac/numpy.average(q_factors2[max(ind-5,0):ind])
+                    if qfm > qfmax or (qfac > 20.0*cutoff_scale and qfm > 5.0*cutoff_scale):
+                        #print(qfac,numpy.average(q_factors2[max(ind-3,0):ind]),qfm)
+                        edge_energies_major = numpy.append(edge_energies_major,edge_energies2[ind])
+                        q_factors_major = numpy.append(q_factors_major,qfm)                
+            elif ind > 1:
+                qfm = qfac/numpy.average(q_factors2[max(ind-5,0):ind])
+                if qfm > qfmax or (qfac > 20.0*cutoff_scale and qfm > 5.0*cutoff_scale):
                     edge_energies_major = numpy.append(edge_energies_major,edge_energies2[ind])
+                    q_factors_major = numpy.append(q_factors_major,qfm)
+            elif ind > 0:
+                qfm = qfac/q_factors2[ind-1]
+                if qfm > qfmax or (qfac > 20.0*cutoff_scale and qfm > 5.0*cutoff_scale):
+                    edge_energies_major = numpy.append(edge_energies_major,edge_energies2[ind])
+                    q_factors_major = numpy.append(q_factors_major,qfm)                
+
             else:
-                q_factors_major = numpy.append(q_factors_major,qfac/denom)
-                edge_energies_major = numpy.append(edge_energies_major,edge_energies2[ind])
-            
+                qfm = qfac
+                if qfm > qfmax:
+                    edge_energies_major = numpy.append(edge_energies_major,edge_energies2[ind])
+                    q_factors_major = numpy.append(q_factors_major,qfm)                
+
         elif (qfac/denom > min_corr_minor):  #and (qfac >= q_factors2[max(ind-1,0)]) and (qfac >= q_factors2[min(ind+1,q_factors2.shape[-1]-1)]):
             if edge_energies_minor.shape[-1] > 0:
                 if (edge_energies2[ind] - edge_energies_minor[-1] > edge_separation_energy*edge_energies2[ind]): 
@@ -263,13 +420,12 @@ def find_experimental_edge_energies(eels_spectrum: numpy.ndarray, energy_range_e
                 edge_energies_minor = numpy.append(edge_energies_minor,edge_energies2[ind])
 
     if debug_plotting: # For debugging purposes.
-        import matplotlib.pyplot as plt 
-        plt.stem(edge_energies2,q_factors2,linefmt='C2-',markerfmt='o',label='qf2')
+        plt.stem(edge_energies2,q_factors2,linefmt='C2-',markerfmt='o',label='qf2',use_line_collection=True)
         plt.yscale('log')
         if q_factors_major.size >= 1:
-            plt.stem(edge_energies_major,q_factors_major, linefmt='C0-',markerfmt='x', label='major edges')
-        if q_factors_minor.size >= 1:
-            plt.stem(edge_energies_minor,q_factors_minor, linefmt='C1-',markerfmt='s', label='minor edges')
+            plt.stem(edge_energies_major,q_factors_major, linefmt='C0-',markerfmt='x', label='major edges',use_line_collection=True)
+        #if q_factors_minor.size >= 1:
+            #plt.stem(edge_energies_minor,q_factors_minor, linefmt='C1-',markerfmt='s', label='minor edges')
         plt.plot(energies_search, eels_spectrum_search/numpy.amax(eels_spectrum_search))
         plt.legend(loc="upper right")
         plt.show()

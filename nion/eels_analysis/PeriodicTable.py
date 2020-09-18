@@ -87,6 +87,12 @@ class PeriodicTable(metaclass=Singleton):
                 return edge_data_item.get("symbol")
         return None
 
+    def atomic_number(self, element_symbol: str) -> int:
+        for edge_data_item in self.__edge_data:
+            if edge_data_item.get("symbol") == element_symbol:
+                return edge_data_item.get("z")
+        return None
+
     def nominal_binding_energy_ev(self, electron_shell: ElectronShell) -> float:
         for edge_data_item in self.__edge_data:
             if edge_data_item.get("z", 0) == electron_shell.atomic_number:
@@ -131,16 +137,18 @@ class PeriodicTable(metaclass=Singleton):
         edges.sort(key=operator.itemgetter(0))
         return [edge[1] for edge in edges]
 
-    def find_elements_in_energy_interval(self, energy_interval_ev: typing.Tuple[float, float]) -> List:
-        """Return a list of tuples, (atomic_number, edge_dict), with all elements that have edges within the energy range.""" 
-        element_data = list()  # typing.List[typing.Tuple[float, ElectronShell]]
+    def find_elements_in_energy_interval(self, energy_interval_ev: typing.Tuple[float, float]):
+        """Return a dictionary of dictionaries, {atomic_number: edge_dict}, with all elements that have edges within the energy range.""" 
+        element_data = {}  # typing.List[typing.Tuple[float, ElectronShell]]
         # Loop over edge_data and select atomic number and edges that are associated with each.
+        center = (energy_interval_ev[1] + energy_interval_ev[0])/2.0
         for edge_data_item in self.__edge_data:
             edge_dict = edge_data_item.get("edges", dict())
-            # Check if any of the edges lie within the energy range
-            if any(edge_dict.get("edges").values() >= energy_interval_ev[0]) and any(edge_dict['edges'].values() <= energy_interval_ev[1]):
+            edge_energies = [energy for energy in list(edge_dict.values()) if (energy >= energy_interval_ev[0] and energy <= energy_interval_ev[1])]
+            # Check if any of the edges from this element lie within the energy interval
+            if edge_energies:
                 atomic_number = edge_data_item.get("z", 0)
-                element_data.append((atomic_number,edge_dict))
+                element_data.update({str(atomic_number): edge_dict})
                 
         return element_data
 

@@ -8,9 +8,9 @@ import random
 import sys
 import unittest
 # The below are for more extensive testing of all eels atlas data.
-# import glob
-# import pandas 
-# import matplotlib.pyplot as plt
+import glob
+import pandas 
+import matplotlib.pyplot as plt
 
 # niondata must be available as a module.
 # it can be added using something similar to
@@ -58,26 +58,24 @@ class TestEELSAnalysisFunctions(unittest.TestCase):
         print(114,287,460,537,564,649,804,821,858,875)
         
     def test_find_experimental_edge_energies_EELS_Atlas(self):
-        if True: # For now turn this test off. I will keep the directory of all EELS Atlas data on hand for more testing.
+        if False: # For now turn this test off. I will keep the directory of all EELS Atlas data on hand for more testing.
             return
         
         df=pandas.read_csv("EELS_Atlas_Major/files_HE.dat", delim_whitespace=True, header=None)
         file_names,tmp1,efin,tmp2,estart=df.to_numpy().T
 
         i_search=0
-        outF = open("test.dat","w")
-        total_edges_found = 0
+        total_extra_found = 0
         total_edges_edb = 0
         total_edges_matched = 0
-        qfs=[]
         mintol=0.1
         for file_name in file_names:
            # Load data from text file.
+            #data_file = glob.glob('./EELS_Atlas_Major/**/' + file_name,recursive = True)[0]
             data_file = glob.glob('./EELS_Atlas_Major/**/' + file_name,recursive = True)[0]
-            #data_file = glob.glob('./EELS_Atlas_All/**/' + file_name,recursive = True)[0]
             
+            #edge_file = glob.glob('./EELS_Atlas_Major/**/' + 'edges_' + os.path.splitext(file_name)[0]+'.dat', recursive=True)[0]
             edge_file = glob.glob('./EELS_Atlas_Major/**/' + 'edges_' + os.path.splitext(file_name)[0]+'.dat', recursive=True)[0]
-            #edge_file = glob.glob('./EELS_Atlas_All/**/' + 'edges_' + os.path.splitext(file_name)[0]+'.dat', recursive=True)[0]
             energies, eels_spectrum = numpy.loadtxt(data_file, delimiter=',',unpack=True)
             energy_step = (energies[-1] - energies[0])/energies.size
             energy_range_ev = numpy.array([energies[0],energies[-1]+energy_step])
@@ -87,84 +85,97 @@ class TestEELSAnalysisFunctions(unittest.TestCase):
 
             search_range = [estart[i_search],efin[i_search]]
             print(file_name,':')
-            edge_energies,q_factors = EELS_DataAnalysis.find_experimental_edge_energies(eels_spectrum, energy_range_ev,search_range)
-            print("Edges found at the following energies:")
-            outF.write(file_name)
-            outF.write("\n\n")
+            edge_energies,q_factors = EELS_DataAnalysis.find_experimental_edge_energies(eels_spectrum, energy_range_ev,search_range, debug_plotting = False)
             df=pandas.read_csv(edge_file, delim_whitespace=True, header=None)
             edge_names, edb_edge_energies = df.to_numpy().T
+            edge_names = edge_names.tolist()
+            new_q_factors = q_factors.tolist()
             match=[False]*edb_edge_energies.size
             matched=[False]*edge_energies.size
-            print("Edges matched:")
-            outF.write("Edges matched:\n")
-            print("Edge\tfound\tatlas")
-            outF.write("Edge\tfound\tatlas\n")
             i_edb = 0
-            total_edges_found = total_edges_found + edge_energies.size
             all_matched = True
-            for edb_edge_energy in edb_edge_energies:
-                if edb_edge_energy > search_range[0] and edb_edge_energy < search_range[1]:
-                    total_edges_edb = total_edges_edb + 1 
-                    
-                    edb_edge_found = False
-                    i=0
-                    ibest=0
-                    for energy in edge_energies:
-                        if True: #not matched[i]:
-                            if (abs(edb_edge_energy - energy)/edb_edge_energy < 0.1) or abs(edb_edge_energy-energy) < 10.0:
-                                if True: #not match[i_edb]:
-                                    print("\t".join((str(edge_names[i_edb]),str(int(energy)),str(edb_edge_energy),str(q_factors[i]))))
-                                    outF.write("\t".join((str(edge_names[i_edb]),str(int(energy)),str(edb_edge_energy),str(q_factors[i]))))
-                                    outF.write("\n")
-                                    match[i_edb]=True
-                                    matched[i]=True
-                                    qfs = qfs + [q_factors[i]]
-                        i=i+1
-                    if match[i_edb]:
-                        total_edges_matched += 1
-                    all_matched = all_matched and match[i_edb]
-                i_edb += 1
-                
-            i=0
+            new_edge_energies = edge_energies[:].tolist()
+            new_edb_edge_energies = edb_edge_energies[:].tolist()
+            matched = []
+            qfs=[]
+            match_found = True
+            print(new_edb_edge_energies)
+            while len(new_edb_edge_energies) > 0 and len(new_edge_energies) > 0 and match_found:
+            # Search trough all edb_edge_energy, edge_energy pairs to find minimum difference in energy
+                min_diff = 1e10
+                min_i = -1
+                min_j = -1
+                match_found = False
+                for i, edb_edge_energy in enumerate(new_edb_edge_energies):
+                    for j, energy in enumerate(new_edge_energies):
+                        if min_diff > abs(energy - edb_edge_energy):
+                            min_diff = abs(energy - edb_edge_energy)
+                            min_i = i
+                            min_j = j
+
+                if min_diff/new_edb_edge_energies[min_i] < 0.03 or min_diff < 10.0:
+                    # Set matched and remove elements from lists.
+                    qfs = qfs + [new_q_factors.pop(min_j)]
+                    matched = matched + [[edge_names.pop(min_i),new_edb_edge_energies.pop(min_i), new_edge_energies.pop(min_j)]]
+                    match_found = True
+
+            print("Edges matched:")
+            print("Label  Atlas  Found")
+            for m in matched:
+                print(m)
+            print("")
+            print("Edges not matched:")
+            i = 0
+            while i <  len(new_edb_edge_energies):
+                en = new_edb_edge_energies[i]
+                if en > search_range[0] and en < search_range[1]:
+                    print(edge_names[i], en)
+                    i += 1
+                else:
+                    tmp = new_edb_edge_energies.pop(i)
+                    tmp = edge_names.pop(i)
+            print("")
             print("Extra edges found:")
-            outF.write("Extra edges found:\n")
-            for energy in edge_energies:
-                if not matched[i]:
-                    print('\t'.join((str(int(energy)),str(q_factors[i]))))
-                    outF.write('\t'.join((str(int(energy)),str(q_factors[i]))))
-                    outF.write('\n')
-                i += 1
-                
-            outF.write("\n")
-            if not all_matched:
-                print("Edges not matched:")
-                outF.write("Edges not matched: " + file_name + "\n")
-            
-            i=0
-            for energy in edb_edge_energies:
-                if (not match[i]) and (energy < search_range[1]) and (energy > search_range[0]) :
-                    print('\t'.join((str(edge_names[i]), str(int(energy)))))
-                    outF.write('\t'.join((str(edge_names[i]), str(int(energy)))))
-                    outF.write('\n')
-                i += 1
-            outF.write("\n")
-            outF.write("\n")
-            print(" ")
-            print(" ")
+            for en in new_edge_energies:
+                print(en)
+            total_edges_matched += len(matched)
+            total_edges_edb += len(new_edb_edge_energies) + len(matched)
+            total_extra_found += len(new_edge_energies)
+            if len(new_edb_edge_energies) + len(matched) > 0:
+                print("Percentage of edges matched:", float(len(matched))/float(len(matched)+len(new_edb_edge_energies))*100.0)
+                print("Percentage extra edges:", float(len(new_edge_energies))/float(len(matched)+len(new_edb_edge_energies))*100.0)
+                print("")
+                print("")
+                print("")
+                if False:
+                    ens = numpy.array([m[2] for m in matched])
+                    qfs = numpy.array(qfs)
+                    plt.stem(ens,qfs/numpy.amax(qfs),label='matched',use_line_collection=True)
+                    plt.stem(numpy.array(edge_energies),numpy.array(q_factors)/numpy.amax(qfs),label='found',use_line_collection=True)
+                    plt.plot(energies,eels_spectrum*energies**2/numpy.amax(eels_spectrum*energies**2))
+                    plt.show()
+            else:
+                print("No edges in this energy range.")
+                print("")
+                print("")
+                print("")
+
             i_search=i_search+1
 
-        print("Percentage of edges found: ", float(total_edges_matched)/float(total_edges_edb)*100.0)
-        print("Percentage of extra edges found: ", float(total_edges_found - total_edges_matched)/float(total_edges_edb)*100.0)
-        qfs = numpy.array(qfs)
-        print("Statistics of q_factors")
-        print("Average: ", numpy.average(qfs))
-        print("Average: ", numpy.median(qfs))
-        print("Stdev: ", numpy.std(qfs))
-        print("Min: ", numpy.amin(qfs))
+        if total_edges_edb > 0:
+            print("Total percentage of edges found: ", float(total_edges_matched)/float(total_edges_edb)*100.0)
+            print("Total percentage of extra edges found: ", float(total_edges_matched - total_edges_matched)/float(total_edges_edb)*100.0)
+            qfs = numpy.array(qfs)
+            print("Statistics of q_factors")
+            print("Average: ", numpy.average(qfs))
+            print("Average: ", numpy.median(qfs))
+            print("Stdev: ", numpy.std(qfs))
+            print("Min: ", numpy.amin(qfs))
+        else:
+            print("No edges to match for this set of files.")
         #hist,bin_edges = numpy.histogram(qfs,bins=250)
         #plt.hist(hist,bin_edges)
         #plt.show()
-        outF.close()
 
     def test_find_experimental_edge_energies_re_analyze_false(self):
         # Test the keywork re_analyze. The function keeps all edge data from the previous analysis. If re_analyze = False,
@@ -203,7 +214,7 @@ class TestEELSAnalysisFunctions(unittest.TestCase):
 
         print("Do initial analysis.") 
         # First set sensitivity to 1.0, this will find many edges.
-        edge_energies,q_factors = EELS_DataAnalysis.find_experimental_edge_energies(eels_spectrum, energy_range_ev,correlation_cutoff_scale=0.0, debug_plotting=False)
+        edge_energies,q_factors = EELS_DataAnalysis.find_experimental_edge_energies(eels_spectrum, energy_range_ev,correlation_cutoff_scale=0.0, debug_plotting=True)
         print("Number of edges found = ", edge_energies.size)
 
         scale=0.0
