@@ -283,7 +283,7 @@ def calculate_background_signal(data_and_metadata: DataAndMetadata.DataAndMetada
     # bkgd_range = numpy.array([signal_calibration.convert_to_calibrated_value(fit_range0[0]), signal_calibration.convert_to_calibrated_value(fit_range0[1])])
     bkgd_ranges = numpy.array([numpy.array([signal_calibration.convert_to_calibrated_value(fit_range[0] * signal_length), signal_calibration.convert_to_calibrated_value(fit_range[1] * signal_length)]) for fit_range in fit_ranges])
     # print("d {} s {} e {} d {} b {}".format(data.shape if data is not None else None, spectral_range, edge_onset, edge_delta, bkgd_range))
-    edge_map, edge_profile, bkgd_model, profile_range = EELS_DataAnalysis.core_loss_edge(data, spectral_range, edge_onset, edge_delta, bkgd_ranges)
+    edge_map, edge_profile, total_integral, bkgd_model, profile_range = EELS_DataAnalysis.core_loss_edge(data, spectral_range, edge_onset, edge_delta, bkgd_ranges)
 
     # Squeeze the result
     result = numpy.squeeze(bkgd_model)
@@ -347,6 +347,9 @@ def make_signal_like(data_and_metadata_src: DataAndMetadata.DataAndMetadata, dat
 
 def map_background_subtracted_signal(data_and_metadata: DataAndMetadata.DataAndMetadata, electron_shell: typing.Optional[PeriodicTable.ElectronShell], fit_ranges, signal_range) -> DataAndMetadata.DataAndMetadata:
     """Subtract si_k background from data and metadata with signal in first index."""
+    # For now set hardcoded switch.
+    useFEFF = True
+
     signal_index = -1
 
     signal_length = data_and_metadata.dimensional_shape[signal_index]
@@ -360,6 +363,7 @@ def map_background_subtracted_signal(data_and_metadata: DataAndMetadata.DataAndM
     bkgd_ranges = numpy.array([numpy.array([signal_calibration.convert_to_calibrated_value(fit_range[0] * signal_length), signal_calibration.convert_to_calibrated_value(fit_range[1] * signal_length)]) for fit_range in fit_ranges])
 
     cross_section = None
+
     if electron_shell is not None:
         beam_energy_ev = data_and_metadata.metadata.get("beam_energy_eV")
         beam_convergence_angle_rad = data_and_metadata.metadata.get("beam_convergence_angle_rad")
@@ -371,7 +375,7 @@ def map_background_subtracted_signal(data_and_metadata: DataAndMetadata.DataAndM
     data = data_and_metadata.data
 
     # Fit within fit_range; calculate background within signal_range; subtract from source signal range
-    edge_map, edge_profile, bkgd_model, profile_range = EELS_DataAnalysis.core_loss_edge(data, spectral_range, edge_onset, edge_delta, bkgd_ranges)
+    edge_map, edge_profile, total_integral, bkgd_model, profile_range = EELS_DataAnalysis.core_loss_edge(data, spectral_range, edge_onset, edge_delta, bkgd_ranges)
 
     result = edge_map if cross_section is None else edge_map / cross_section
 

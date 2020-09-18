@@ -257,15 +257,17 @@ def partial_cross_section_nm2(atomic_number: int, shell_number: int, subshell_in
 
     The returned cross-section value is in units of nm * nm.
     """
-
+    useFEFF = True
     # Generate the energy differential cross-section array.
     energyDiffSigma = energy_diff_cross_section_nm2_per_ev(atomic_number, shell_number, subshell_index,
                                                            edge_onset_eV, edge_delta_eV, beam_energy_eV,
                                                            convergence_angle_rad, collection_angle_rad)
 
-    # Integrate over energy window to get partial cross-section
-    energySampleCount = energyDiffSigma.shape[0]
-    energy_step = edge_delta_eV / (energySampleCount - 1)
-    partialCrossSection = numpy.trapz(energyDiffSigma, dx = energy_step)
+        energySampleCount = energyDiffSigma.shape[0]
+        energy_step = edge_delta_eV / (energySampleCount - 1)
+
+                                                    
+    partialCrossSection = numpy.trapz(energyDiffSigma_total, dx = energy_step)
+    #print(atomic_number,partialCrossSection)
 
     return partialCrossSection

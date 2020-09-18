@@ -36,8 +36,9 @@ class TestLibrary(unittest.TestCase):
         edge_delta = 100.0
         bkgd_range = numpy.array([400.0, 500.0])
         signal_background = background[400:600]
-        edge_map, edge_profile, bkgd_model, profile_range = analyzer.core_loss_edge(background, spectral_range, edge_onset, edge_delta, bkgd_range)
-        self.assertEqual(bkgd_model.shape, (1, 200))
+        edge_map, edge_profile, total_integral, bkgd_model, profile_range = analyzer.core_loss_edge(background, spectral_range, edge_onset, edge_delta, bkgd_range)
+        self.assertEqual(bkgd_model.shape, (1, 200)) # J Kas - 200 was failing, I think because of my change to denominator in finding step size in
+                                                     #         CurveFittingAndAnalysis.py
         self.assertLess(abs(numpy.amin(bkgd_model) - numpy.amin(signal_background)), numpy.ptp(signal_background) / 100.0)
         self.assertLess(abs(numpy.amax(bkgd_model) - numpy.amax(signal_background)), numpy.ptp(signal_background) / 100.0)
         self.assertLess(numpy.average(bkgd_model - signal_background), scale * 0.0001)
@@ -68,14 +69,15 @@ class TestLibrary(unittest.TestCase):
         edge_onset = 500.0
         edge_delta = 100.0
         bkgd_range = numpy.array([400.0, 500.0])
-        edge_map, edge_profile, bkgd_model, profile_range = analyzer.core_loss_edge(spectrum, spectral_range, edge_onset, edge_delta, bkgd_range)
+        edge_map, edge_profile, total_integral, bkgd_model, profile_range = analyzer.core_loss_edge(spectrum, spectral_range, edge_onset, edge_delta, bkgd_range)
         self.assertEqual(tuple(profile_range), (400, 600))
         self.assertEqual(edge_map.shape, (1, ))
         signal_slice = signal[400:600]
         expected_edge_map = numpy.trapz(signal_slice)
         log10_scale = int(-math.log10(scale) + 1)  # 1/10 of scale
         self.assertAlmostEqual(edge_map[0], expected_edge_map, 1 + log10_scale)  # within 1/10
-        self.assertEqual(edge_profile.shape, (1, 200))
+        self.assertEqual(edge_profile.shape, (1, 200)) # J Kas - 200 was failing, I think because of my change to denominator in finding step size in
+                                                       #         CurveFittingAndAnalysis.py
         self.assertAlmostEqual(numpy.amin(signal_slice), numpy.amin(edge_profile), 2 + log10_scale)  # within 1/100
         self.assertAlmostEqual(numpy.amax(signal_slice), numpy.amax(edge_profile), 2 + log10_scale)  # within 1/100
         self.assertAlmostEqual(numpy.average(signal_slice), numpy.average(edge_profile), 4 + log10_scale)  # within 1/10000

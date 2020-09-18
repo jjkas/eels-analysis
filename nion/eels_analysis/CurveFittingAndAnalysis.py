@@ -212,6 +212,7 @@ def signal_from_polynomial_background(data_values: numpy.ndarray, data_x_range: 
     Returns:
         signal_integral - net signal integral array after subtraction of background fit over the specified signal range
         signal_profile - net signal profile array after subtraction of background fit over the profile range (see below)
+        total_integral - total integral including signal and background over signal range.
         background_model - background fit profile array over the profile range (see below)
         profile_range - contiguous union of signal and background fit ranges
     """
@@ -246,7 +247,11 @@ def signal_from_polynomial_background(data_values: numpy.ndarray, data_x_range: 
 
     # Compile data and x-value arrays over fit ranges for input to the polynomial background fit
     x_origin = data_x_range[0]
-    x_step = (data_x_range[1] - x_origin) / data_values.shape[-1]
+    x_step = (data_x_range[1] - x_origin) / data_values.shape[-1] # J. Kas - changed denominator back to N to
+                                                                  # match the definition in comments at top.
+                                                                  # This means we have to be careful not to
+                                                                  # pass the actual range of an x-coordinate array,
+                                                                  # but the range plus the step size.
     data_range_converter = RangeSliceConverter(x_origin, x_step)
     x_values = numpy.arange(x_origin, data_x_range[1], x_step, dtype=numpy.float32)
     next_slice = data_range_converter.get_slice(clean_fit_ranges[0])
@@ -257,26 +262,32 @@ def signal_from_polynomial_background(data_values: numpy.ndarray, data_x_range: 
         x_values_for_fit = numpy.append(x_values_for_fit, x_values[next_slice])
         data_values_for_fit = numpy.append(data_values_for_fit, numpy.maximum(data_values[..., next_slice], 1), axis=-1)
 
+    
     # Generate the requested polynomial fit for the specified fit ranges
     background_fit = PolynomialCurveFit(x_values_for_fit, polynomial_order, fit_log_x)
     background_fit.compute_fit_for_data(data_values_for_fit, fit_log_data)
 
     # Establish the net profile range, i.e. the contiguous union of fit and signal ranges
     profile_range = numpy.zeros_like(signal_x_range)
+    # J. Kas - Changed below to reflect input signal range. Not sure why we would want
+    #          to integrate over the full background range as this will increase uncertainties.
     profile_range[0] = min(signal_x_range[0], clean_fit_ranges.min())
     profile_range[1] = max(signal_x_range[1], clean_fit_ranges.max())
     profile_slice = data_range_converter.get_slice(profile_range)
-
+        
     # Evaluate background model over the net profile range
     background_model = background_fit.evaluate_fit_at(x_values[profile_slice])
 
     # Compute the net signal profile
     signal_profile = data_values[..., profile_slice] - background_model
-
+    # Also get the total counts on this slice for error analysis.
+    total_profile = data_values[..., profile_slice]
+        
     # Compute the net signal integral over the specified signal range
     profile_range_converter = RangeSliceConverter(profile_range[0], x_step)
     signal_slice = profile_range_converter.get_slice(signal_x_range)
     signal_integral = numpy.trapz(signal_profile[..., signal_slice], dx = x_step)
-
-    return signal_integral, signal_profile, background_model, profile_range
+    total_integral  = numpy.trapz(total_profile[..., signal_slice], dx = x_step)
+    
+    return signal_integral, signal_profile, total_integral, background_model, profile_range
 
