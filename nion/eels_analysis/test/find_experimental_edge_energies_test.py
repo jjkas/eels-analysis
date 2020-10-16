@@ -58,7 +58,7 @@ class TestEELSAnalysisFunctions(unittest.TestCase):
         print(114,287,460,537,564,649,804,821,858,875)
         
     def test_find_experimental_edge_energies_EELS_Atlas(self):
-        if False: # For now turn this test off. I will keep the directory of all EELS Atlas data on hand for more testing.
+        if True: # For now turn this test off. I will keep the directory of all EELS Atlas data on hand for more testing.
             return
         
         df=pandas.read_csv("EELS_Atlas_Major/files_HE.dat", delim_whitespace=True, header=None)
@@ -214,7 +214,7 @@ class TestEELSAnalysisFunctions(unittest.TestCase):
 
         print("Do initial analysis.") 
         # First set sensitivity to 1.0, this will find many edges.
-        edge_energies,q_factors = EELS_DataAnalysis.find_experimental_edge_energies(eels_spectrum, energy_range_ev,correlation_cutoff_scale=0.0, debug_plotting=True)
+        edge_energies,q_factors = EELS_DataAnalysis.find_experimental_edge_energies(eels_spectrum, energy_range_ev,correlation_cutoff_scale=0.0, debug_plotting=False)
         print("Number of edges found = ", edge_energies.size)
 
         scale=0.0
