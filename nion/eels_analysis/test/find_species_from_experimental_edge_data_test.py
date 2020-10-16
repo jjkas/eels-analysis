@@ -72,7 +72,7 @@ class TestEELSAnalysisFunctions(unittest.TestCase):
 
             search_range = [estart[i_search],efin[i_search]]
             chem_formula = file_name.split('_')[0]
-            elements_exp = [elem.strip(string.digits) for elem in re.findall('[A-Z][^A-Z]*',chem_formula) if ptable.atomic_number(elem) in ptable.find_elements_in_energy_interval(search_range)]
+            elements_exp = [elem.strip(string.digits) for elem in re.findall('[A-Z][^A-Z]*',chem_formula) if str(ptable.atomic_number(elem)) in ptable.find_elements_in_energy_interval(search_range)]
             print(file_name,':')
             experimental_edge_data = EELS_DataAnalysis.find_experimental_edge_energies(eels_spectrum, energy_range_ev,search_range, debug_plotting = False)
             df=pandas.read_csv(edge_file, delim_whitespace=True, header=None)

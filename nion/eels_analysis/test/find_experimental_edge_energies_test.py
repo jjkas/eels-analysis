@@ -85,7 +85,7 @@ class TestEELSAnalysisFunctions(unittest.TestCase):
 
             search_range = [estart[i_search],efin[i_search]]
             print(file_name,':')
-            edge_energies,q_factors = EELS_DataAnalysis.find_experimental_edge_energies(eels_spectrum, energy_range_ev,search_range, debug_plotting = False)
+            edge_energies,q_factors = EELS_DataAnalysis.find_experimental_edge_energies(eels_spectrum, energy_range_ev,search_range, debug_plotting = True)
             df=pandas.read_csv(edge_file, delim_whitespace=True, header=None)
             edge_names, edb_edge_energies = df.to_numpy().T
             edge_names = edge_names.tolist()

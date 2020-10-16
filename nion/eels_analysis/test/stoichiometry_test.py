@@ -139,7 +139,7 @@ class TestLibrary(unittest.TestCase):
         # Read EELS data from file (BN). This is data from Tracy, taken from a thin part of the sample,
         # and represents to some extent a best case scenario.
         test_data_dir = Path(__file__).parent / 'Test_Data'
-        data_files = [test_data_dir / 'BN0-0910eV.msa', test_data_dir / 'CaCO3.msa', test_data_dir / 'CuO.msa']
+        data_files = [test_data_dir / 'BN_0-0910eV_.msa', test_data_dir / 'CaCO3.msa', test_data_dir / 'CuO.msa']
         labels = ['BN', 'CaCO_3','CuO']
         #data_file = Path('./Test_Data/EELS_Thick.csv')
         #data_file = Path('./Test_Data/EELS_Thin.csv')
@@ -190,6 +190,7 @@ class TestLibrary(unittest.TestCase):
             print("----------------------------------------------------------------------------")
             iData += 1
             
+
 if __name__ == '__main__':
     unittest.main()
 
