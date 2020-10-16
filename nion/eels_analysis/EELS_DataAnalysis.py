@@ -15,7 +15,7 @@ import copy
 
 # local libraries
 from nion.eels_analysis import CurveFittingAndAnalysis
-from nion.eels_analysis import EELS_CrossSections
+from nion.eels_analysis import eels_analysis 
 from nion.eels_analysis import PeriodicTable
 
 __experimental_edge_data = (None, None)
@@ -26,9 +26,20 @@ def find_species_from_experimental_edge_data(eels_spectrum: numpy.ndarray, energ
     Input:
         eels_spectrum    - array of spectral data
         energy_range_ev  - 2 element array containing energy range. First element is energy associated with start of
-                           spectral element, second element is end of last spectral element, i.e. = # of elements * energy_step 
-        experimental_edge_data - tuple that contains numpy array of edge_energies and array of quality factor.
+                           first spectral element, second element is end of last spectral element, i.e. = # of elements * energy_step + energy_range_ev[0]
+        experimental_edge_data - 2 element tuple that contains numpy array of edge_energies and array of quality factor (quality factor indicates how lilkely it is 
+                                     that this is a real edge.
         **kwargs         - Options for controling the algorithm
+            only_major_edges - Boolean: If True, do not include minor edges in search. Default -> True
+            element_list - List of atomic numbers of elements to include in the search. If not supplied, all elements in periodic table (at present listed
+                                 up to U (92) are included.
+    
+    Output:
+        atom_data - list of lists: 
+                          atom_data[i][0] - int: Atomic number of elements possibly associated with this experimental spectrum.
+                          atom_data[i,1] - list of tuples, each containting (edge_name, number_of_edges_for_this_element, theoretical_edge_energy, experimental_edge_energy) 
+                                           Note that each experimental edge is associated with only one theoretical edge per element and vice versa, i.e., there is a one-to-one
+                                           correspondence between theoretical_edge <-> experimental_edge per element. 
     """
     # Sanity checks
     # Make sure eels_spectrum holds data (probably should be > 10 or 20 or something, but I'll put 1 for now.
@@ -98,8 +109,8 @@ def find_species_from_experimental_edge_data(eels_spectrum: numpy.ndarray, energ
     atom_data = []
     i_atom = 0
     for atom,edges in element_data.items():
-        if not element_list or int(atom) in element_list:
-            # Get major edges for this element that lie withing the range of the experimental data.
+        if (not element_list) or (int(atom) in element_list):
+            # Get major edges for this element that lie within the range of the experimental data.
             major_edges_for_this_atom = []
             for edge_label,energy in edges.items():
                 if int(atom) in major_edges_reduced:
@@ -129,35 +140,59 @@ def find_species_from_experimental_edge_data(eels_spectrum: numpy.ndarray, energ
                     number_edges_matched += 1
                     if len(atom_data) - 1 < i_atom:
                         atom_data = atom_data + [[int(atom)]]
-                        atom_data[i_atom] = atom_data[i_atom] + [best_edge_name,best_edge_for_this_exp_edge,exp_edge_energy]
+                        atom_data[i_atom] = atom_data[i_atom] + [[(best_edge_name,best_edge_for_this_exp_edge,exp_edge_energy)]]
                     else:
-                        atom_data[i_atom] = atom_data[i_atom] + [best_edge_name,best_edge_for_this_exp_edge,exp_edge_energy]
+                        atom_data[i_atom][1] = atom_data[i_atom][1] + [[(best_edge_name,best_edge_for_this_exp_edge,exp_edge_energy)]]
                     
                     if best_edge_name in major_edges_for_this_atom:
                         major_edges_for_this_atom.remove(best_edge_name)
 
             if has_edge:
                 if True: #if len(major_edges_for_this_atom) == 0:
-                    atom_data[i_atom].insert(1,number_edges_matched)
+                    #atom_data[i_atom].insert(1,number_edges_matched)
                     i_atom += 1
                 else:
                     del atom_data[i_atom]
-
 
     return atom_data
     
     
 def find_experimental_edge_energies(eels_spectrum: numpy.ndarray, energy_range_ev: numpy.ndarray,
                                     search_range_ev: numpy.ndarray = None, **kwargs) -> numpy.ndarray:
-    """Find energies where edges are located in experimental eels spectrum.
+    """Find energies where edges are located in experimental eels spectrum. In particular find an exhaustive list of edges and quality factors associated with
+       features that might be edges. Then filter based on size of quality factor. 
 
     Input:
         eels_spectrum    - array of spectral data
         energy_range_ev  - 2 element array containing energy range. First element is energy associated with start of
-                           spectral element, second element is end of last spectral element, i.e. = # of elements * energy_step 
+                           first spectral element, second element is end of last spectral element, i.e. = # of elements * energy_step + energy_range_ev[0]
         search_range_ev  - 2 element array containing energy range to include in search for edges.
-        **kwargs         - Options for controling the algorithm
 
+        **kwargs         - Options for controling the algorithm
+                   sensitivity: Should be between 0 and 1, although this is enforced below. Sets overall sensitivity of edge finder, 0 returns only one edge,
+                                1 returns (too) many edges, likely showing experimental noise etc.   
+                   debug_plotting: Plots the spectrum and quality factors for debugging and analysis. For developers only.
+                   reanalyze: If True (default) perform full analysis of experimental spectrum to find experimental edges. If False, do not re-analyze experimental
+                              data (don't find edges or quality factors), but start with the exhaustive list of edges, quality factors from previous full call, and 
+                              only perform the filtering step. 
+                   correlation_energy_range_ev: Controls the smooting of the correlation coefficient array. Larger range, less sensitivity to noise, but may miss edges.
+                              Smaller range is susceptible to noice. 
+                              Default: sensitivity*50eV (default sensitivity is 0.5, so 25eV)
+                                       Note: If correlation_energy_range_ev is larger than the width of search_range_ev/10, then it will be set to search_range_ev/10
+                                             Subsequently, if correlation_energy_range_ev is smaller than 5*energy_step_ev (calculated below) it will be set to 5*energy_step_ev.
+                                             These checks are important, and keep the range from being set too small or too large.
+                              Explanation:
+                              As part of the analysis, an array of correlation coefficients are calculated, to represent the correllation of the 
+                              energy axis and the spectrum axis at each point. The ith correlation coefficient is calculated between an array of energies 
+                              that extends from energy[i]-correlation_energy_range_ev to energy[i], and the corresponding subarray of the spectrum. 
+                   derivative_smoothing_npoints: Number of points to use in derivative smoothing. Simple running average used, averaging the derivative of the spectrum
+                              between [i-derivative_smoothing_npoints:i+derivative_smoothing_npoints]
+                              Note: If derivative_smoothing_npoints > number of points in search range / 10, use number of points in search range / 10.
+                   edge_separation_parameter: Ignore any edges found between current edge and edge*(1+edge_separation_parameter). Default is sensitivity/50 (0.01 if sensitivity
+                              is left at 0.5). 
+                              Note: There are hard coded limits that 10eV < edge*edge_separation_parameter < 50eV. 
+                   cutoff_scale: Sets cutoff of quality factor for edge determination. If 0, all edges will be included, if large, very few will be included.
+                              Note: There is a hard-coded min of 0, and a max that will give one edge for the spectrum.
     Returns:
         experimental_edge_energies_ev - array of edge energies.
     """
@@ -222,7 +257,7 @@ def find_experimental_edge_energies(eels_spectrum: numpy.ndarray, energy_range_e
         # Set energy range for calculating the correlation coefficient. A smaller energy range will be more
         # susceptible to noise, while a larger energy range will only be sensitive to changes the persist over
         # a larger energy range. Default to the min of 25eV or 1/10th the search range.
-        correlation_energy_range = min(kwargs.get("correlation_energy_range_ev",max(50.0*sensitivity_parameter,5*energy_step)),(emax_search-emin_search)/10.0)
+        correlation_energy_range = max(min(kwargs.get("correlation_energy_range_ev",50.0*sensitivity_parameter),(emax_search-emin_search)/10.0), 5*energy_step)
         i_start = -1
         i_end = -1
         for i_energy, energy in enumerate(energies_search):
@@ -250,42 +285,28 @@ def find_experimental_edge_energies(eels_spectrum: numpy.ndarray, energy_range_e
         # Now smooth first derivative via simple local averaging, then subtract off longer range local average.
         # Right now these are hard coded number of points average, but they should be set by keyword arguments
         # and defaults.
-        num_avg=kwargs.get('derivative_smoothing',2)
+        num_avg=max(min(kwargs.get('derivative_smoothing_npoints',2),first_derivative.shape[-1]),0)
     
         # Also average over a longer range only extending below the current point. This will give some measure of the average derivative of the background.
-        num_lr_avg=max(num_avg*4,16)
-        first_derivative_avg = numpy.zeros(first_derivative.shape[-1])
-        first_derivative_long_range_avg = numpy.zeros(first_derivative.shape[-1])
-        
-        for i,fd in enumerate(first_derivative):
-            if (i-num_avg >= 0) and (i+num_avg <= first_derivative.shape[-1] - 1):
-                first_derivative_avg[i] = numpy.average(first_derivative[i-num_avg:i+num_avg])
-            else:
-                first_derivative_avg[i] = numpy.average(first_derivative[0:num_avg])
-                
-                if (i-num_lr_avg >= 0): 
-                    first_derivative_long_range_avg[i] = numpy.average(first_derivative[i-num_lr_avg:i])
-                elif (i-num_lr_avg < 0):
-                    first_derivative_long_range_avg[i] = numpy.average(first_derivative[0:num_lr_avg]) 
-                else:
-                    first_derivative_long_range_avg[i] = numpy.sum(first_derivative[i-num_lr_avg:])/(2*num_lr_avg+1)
-            
-            # Subtract the background derivative from the derivative
-            first_derivative_avg[i] = (first_derivative_avg[i] - first_derivative_long_range_avg[i])/numpy.sqrt(eels_spectrum_search[i]) if eels_spectrum_search[i]>0 else 0.0 
+        num_lr_avg=min(max(num_avg*2,16),int(first_derivative.shape[-1]/5))
+        cumsum_vec = numpy.cumsum(first_derivative)
+        if num_avg > 0:
+            first_derivative_avg = numpy.zeros(first_derivative.shape[-1])
+            first_derivative_avg = (cumsum_vec[num_avg:] - cumsum_vec[:-num_avg]) / num_avg
+        else:
+            first_derivative_avg[:] = first_derivative[:]
 
-        first_derivative3 = copy.deepcopy(first_derivative_avg)
-        num_avg=2*kwargs.get('derivative_smoothing',2)
-        num_lr_avg=2*max(num_avg*2,16)
-        cumsum_vec = numpy.cumsum(first_derivative) 
-        first_derivative_avg = (cumsum_vec[num_avg:] - cumsum_vec[:-num_avg]) / num_avg
+        first_derivative_long_range_avg = numpy.zeros(first_derivative.shape[-1])
         first_derivative_long_range_avg = (cumsum_vec[num_lr_avg:] - cumsum_vec[:-num_lr_avg]) / num_lr_avg
+
         first_derivative2 = first_derivative[:]
         first_derivative2[int(num_lr_avg/2):-int(num_lr_avg/2)]=(first_derivative_avg[int((num_lr_avg-num_avg)/2):-int((num_lr_avg-num_avg)/2)] - first_derivative_long_range_avg)
         first_derivative2[0:int(num_lr_avg/2-1)] = 0.0
         first_derivative2[-int(num_lr_avg/2+1):-1] = 0.0
         first_derivative2 = first_derivative2/numpy.sqrt(eels_spectrum_search)
         first_derivative = first_derivative2[:]
-        if debug_plotting: # Meant for debugging only.
+        
+        if False: #debug_plotting: # Meant for debugging only.
             import matplotlib.pyplot as plt 
             plt.plot(energies_search, eels_spectrum_search/numpy.amax(eels_spectrum_search))
             plt.plot(energies_search, first_derivative, label='1st')
@@ -353,13 +374,15 @@ def find_experimental_edge_energies(eels_spectrum: numpy.ndarray, energy_range_e
     else:
         q_factors2 = __experimental_edge_data[1]
         edge_energies2 = __experimental_edge_data[0]
-        
+
+    if q_factors2.size == 0:
+        return
     # Parameters to control filtering
     # Below this is filtering options
     
     # We will take only first edge found after each maximum in the corr_coeff_array - edge_separation_energy.
-    # Default is 7.5eV, minimum is 2*energy step. Multiply edge_separation parameter by edge energy.
-    edge_separation_energy = kwargs.get('edge_separation_parameter',sensitivity_parameter/50.0)
+    # Multiply edge_separation parameter by edge energy.
+    edge_separation_parameter = kwargs.get('edge_separation_parameter',sensitivity_parameter/50.0)
 
     # Define a deviation. This isn't perfect, but it's close enough. Most edges are way above the median deviation.
     
@@ -377,8 +400,8 @@ def find_experimental_edge_energies(eels_spectrum: numpy.ndarray, energy_range_e
     #part_of_last_edge = False
     denom = sigma
     max_qf = max(q_factors2)
-    cutoff_scale = max(min(kwargs.get('cutoff_scale',sensitivity_parameter*2.0),10.0),0.0)
     q_factors2 = q_factors2/denom
+    cutoff_scale = max(min(kwargs.get('cutoff_scale',sensitivity_parameter*2.0),max(q_factors2)/20.0),0.0)
     min_corr_major = cutoff_scale
     min_corr_minor = 0.0 #min_corr_major/5.0
     qfmax=10.0*cutoff_scale
@@ -386,22 +409,22 @@ def find_experimental_edge_energies(eels_spectrum: numpy.ndarray, energy_range_e
         # get standard deviation of nearby q_factors to normalize quality factor
         #denom=numpy.std(numpy.abs(q_factors2[max(ind-5,0):max(ind-1,2)]))
         #denom = 1.0
-        if (qfac > 6.0*cutoff_scale): #min_corr_major):
+        if (qfac >= 6.0*cutoff_scale): #min_corr_major):
             if edge_energies_major.shape[-1] > 0:
-                if (edge_energies2[ind] - edge_energies_major[-1] > min(max(edge_separation_energy*edge_energies2[ind],10.0),50.0)):
+                if (edge_energies2[ind] - edge_energies_major[-1] > min(max(edge_separation_parameter*edge_energies2[ind],10.0),50.0)):
                     qfm = qfac/numpy.average(q_factors2[max(ind-5,0):ind])
-                    if qfm > qfmax or (qfac > 20.0*cutoff_scale and qfm > 5.0*cutoff_scale):
+                    if qfm > qfmax or (qfac >= 20.0*cutoff_scale and qfm > 5.0*cutoff_scale):
                         #print(qfac,numpy.average(q_factors2[max(ind-3,0):ind]),qfm)
                         edge_energies_major = numpy.append(edge_energies_major,edge_energies2[ind])
                         q_factors_major = numpy.append(q_factors_major,qfm)                
             elif ind > 1:
                 qfm = qfac/numpy.average(q_factors2[max(ind-5,0):ind])
-                if qfm > qfmax or (qfac > 20.0*cutoff_scale and qfm > 5.0*cutoff_scale):
+                if qfm > qfmax or (qfac >= 20.0*cutoff_scale and qfm > 5.0*cutoff_scale):
                     edge_energies_major = numpy.append(edge_energies_major,edge_energies2[ind])
                     q_factors_major = numpy.append(q_factors_major,qfm)
             elif ind > 0:
                 qfm = qfac/q_factors2[ind-1]
-                if qfm > qfmax or (qfac > 20.0*cutoff_scale and qfm > 5.0*cutoff_scale):
+                if qfm > qfmax or (qfac >= 20.0*cutoff_scale and qfm > 5.0*cutoff_scale):
                     edge_energies_major = numpy.append(edge_energies_major,edge_energies2[ind])
                     q_factors_major = numpy.append(q_factors_major,qfm)                
 
@@ -413,7 +436,7 @@ def find_experimental_edge_energies(eels_spectrum: numpy.ndarray, energy_range_e
 
         elif (qfac/denom > min_corr_minor):  #and (qfac >= q_factors2[max(ind-1,0)]) and (qfac >= q_factors2[min(ind+1,q_factors2.shape[-1]-1)]):
             if edge_energies_minor.shape[-1] > 0:
-                if (edge_energies2[ind] - edge_energies_minor[-1] > edge_separation_energy*edge_energies2[ind]): 
+                if (edge_energies2[ind] - edge_energies_minor[-1] > edge_separation_parameter*edge_energies2[ind]): 
                     q_factors_minor = numpy.append(q_factors_minor,qfac/denom)
                     edge_energies_minor = numpy.append(edge_energies_minor,edge_energies2[ind])
             else:
@@ -421,6 +444,7 @@ def find_experimental_edge_energies(eels_spectrum: numpy.ndarray, energy_range_e
                 edge_energies_minor = numpy.append(edge_energies_minor,edge_energies2[ind])
 
     if debug_plotting: # For debugging purposes.
+        import matplotlib.pyplot as plt 
         plt.stem(edge_energies2,q_factors2,linefmt='C2-',markerfmt='o',label='qf2',use_line_collection=True)
         plt.yscale('log')
         if q_factors_major.size >= 1:
@@ -472,7 +496,7 @@ def core_loss_edge(core_loss_spectra: numpy.ndarray, core_loss_range_eV: numpy.n
 
 def relative_atomic_abundance(core_loss_spectra: numpy.ndarray, core_loss_range_eV: numpy.ndarray, background_ranges_eV: numpy.ndarray,
                                 atomic_number: int, edge_onset_eV: float, edge_delta_eV: float,
-                                beam_energy_eV: float, convergence_angle_rad: float, collection_angle_rad: float) -> numpy.ndarray:
+                                beam_energy_eV: float, convergence_angle_rad: float, collection_angle_rad: float):
     """Isolate the specified edge signal from the core-loss spectra and compute a relative atomic concentration value.
 
     Returns:
@@ -481,42 +505,78 @@ def relative_atomic_abundance(core_loss_spectra: numpy.ndarray, core_loss_range_
         error            - combined experimental and theoretical error in atomic abundance.
     """
     edge_data = core_loss_edge(core_loss_spectra, core_loss_range_eV, edge_onset_eV, edge_delta_eV, background_ranges_eV)
+    if False:
+        print(edge_onset_eV,edge_delta_eV)
+        print(edge_data[0])
+        import matplotlib.pyplot as plt
+        delta = (core_loss_range_eV[1]-core_loss_range_eV[0])/core_loss_spectra.shape[-1]
+        energies = numpy.arange(core_loss_range_eV[0],core_loss_range_eV[1],delta)
+        print(edge_data[4].size,edge_data[3].size,edge_data[1].size)
+        plt.plot(edge_data[4],edge_data[1][0])
+        plt.plot(edge_data[4],edge_data[3][0])
+        plt.plot(energies,core_loss_spectra)
+        plt.show()
+
     # The following should ultimately be pulled out of the edge ID table, based on atomic number and edge onset
     shell_number = 1
     subshell_index = 1
-    cross_section_data = EELS_CrossSections.partial_cross_section_nm2(atomic_number, shell_number, subshell_index, edge_onset_eV, edge_delta_eV,
+    cross_section_data,diff_cross_section,egrid_ev = eels_analysis.partial_cross_section_nm2(atomic_number, shell_number, subshell_index, edge_onset_eV, edge_delta_eV,
                                                                     beam_energy_eV, convergence_angle_rad, collection_angle_rad)
+    #print("cross_section_data", cross_section_data, edge_data[0])
     cross_section = cross_section_data #cross_section_data[0]
-    atomic_abundance = edge_data[0] / cross_section
+
+    if cross_section > 0:
+        atomic_abundance = edge_data[0] / cross_section 
+    else: 
+        atomic_abundance = 0
     # Now find errors. Assume Poisson error for experimental cross section (S_exp), 10% theoretical errors (s_thy). Then error in relative atomic abundance is
     # S = atomic_abundance*\sqrt[ (S_exp/cross_exp)^2 + (S_thy/cross_thy)^2 ]
     # Poisson error is sqrt of integral of total experimental signal. Total integral is = edge_data[1]
     sig_sq_exp = edge_data[2]
     relative_error_thy = 0.1 # 10% error
-    error = atomic_abundance*numpy.sqrt(sig_sq_exp/(edge_data[0])**2 + relative_error_thy**2)
+    if edge_data[0] > 0:
+        error = atomic_abundance*numpy.sqrt(sig_sq_exp/(edge_data[0])**2 + relative_error_thy**2)
+    else:
+        error = 0
     
-    return atomic_abundance, error
+    return atomic_abundance, error, edge_data,diff_cross_section*atomic_abundance,egrid_ev
 
-def stoichiometry_from_eels(eels_spectrum: numpy.ndarray, eels_range_eV: numpy.ndarray, background_ranges_eV: typing.List[numpy.ndarray], atomic_numbers: typing.List[int],
-                                 edge_onsets_eV: typing.List[float], edge_deltas_eV: typing.List[float], 
-                                 beam_energy_eV: float, convergence_angle_rad: float, collection_angle_rad: float) -> typing.Tuple[numpy.ndarray,numpy.ndarray]:
+def stoichiometry_from_eels(eels_spectrum: numpy.ndarray, energy_range_ev: numpy.ndarray, background_ranges_ev: typing.List[numpy.ndarray], atomic_numbers: typing.List[int],
+                                 edge_onsets_ev: typing.List[typing.List[float]], edge_deltas_ev: typing.List[float], 
+                                 beam_energy_ev: float, convergence_angle_rad: float, collection_angle_rad: float):
     """Quantify a complete EELS spectrum given atomic species in the system and edges in the spectrum (signal ranges and background ranges).
+    Input: 
+        eels_spectrum: numpy array of specral data. For this to be sensible, the array should be over a range that includes more than one edge.
+        energy_range_ev  - 2 element array containing energy range of the spectrum. First element is energy associated with start of
+                           first spectral element, second element is end of last spectral element, i.e. = # of elements * energy_step + energy_range_ev[0]
+        background_ranges_ev - list of numpy arrays, each one specifying the energy range for background subtraction. There should be one range for each element of edge_onsets_ev.
+        atomic_numbers: atomic number associated with each edge onset in edge_onsets_ev.
+        edge_onsets_ev: experimental edge energies associated with experimental spectrum
+        edge_deltas_ev: signal width for each edge
+        beam_energy_ev: electron beam energy in ev
+        convergence_angle_rad: convergence angle in radians
+        collection_angle_rad: collection angle in radians
 
     Returns:
-        stoichiometries - relative to first atom in list.
-        error_in_stoichiometry - combined theoretical/experimental errors.
-        -- Below for future output:
-        calculated cross sections - in nm^2 for each edge.
-        core-loss signal for each edge
-        background for each edge
-        calculated differential cross section for each edge.
+        (stoichiometry,error_in_stoichiometry, edge_data, diff_cross_section, egrid_ev)
+
+              stoichiometry - relative to first atom in list.
+              error_in_stoichiometry - combined theoretical/experimental errors.
+              edge_data - list of tuples: for each edge listed in stoichiometry, (signal_integral, signal_profile, total_integral, background_model, energy_grid)
+                                          signal_integral  - core-loss edge signal integral
+                                          signal_profile   - background subtracted core-loss profile
+                                          total_integral   - total integral (over the signal range) before background subtraction.
+                                          background_model - background function evaluated on same grid as signal_profile.
+                                          energy_grid      - grid on which the background model and signal profile are defined.
+              diff_cross_section - theoretical differential cross section.
+              egrid_ev - energy grid on which the diff_cross_section is calculated
     """
     # For now assert that the number of atomic species, background_ranges, edge_onsets, edge_deltas are equal. This assumes that each
     # edge range only contains signal from one atomic species.
-    assert len(edge_onsets_eV) > 1
-    assert len(edge_onsets_eV) == len(atomic_numbers)
-    assert len(edge_onsets_eV) == len(edge_deltas_eV)
-    assert len(edge_onsets_eV) == len(background_ranges_eV)
+    assert len(edge_onsets_ev) >=1
+    assert len(atomic_numbers) >=1
+    assert len(edge_onsets_ev) == len(edge_deltas_ev)
+    assert len(edge_onsets_ev) == len(background_ranges_ev)
 
 
     # First calculate the cross section associated with each edge. 
@@ -528,7 +588,10 @@ def stoichiometry_from_eels(eels_spectrum: numpy.ndarray, eels_range_eV: numpy.n
         image_shape = eels_spectrum.shape[0]
 
     
-    abundance=numpy.array([[0.0]*image_shape]*len(atomic_numbers))
+    abundance = numpy.array([[0.0]*image_shape]*len(atomic_numbers))
+    edge_data = []
+    diff_cross_section = []
+    egrid_ev = []
     err = numpy.array([[0.0]*image_shape]*len(atomic_numbers))
     stoichiometry = numpy.array([[0.0]*image_shape]*len(atomic_numbers))
     total_number  = numpy.array([0.0]*image_shape)
@@ -536,11 +599,14 @@ def stoichiometry_from_eels(eels_spectrum: numpy.ndarray, eels_range_eV: numpy.n
     error_in_stoichiometry=numpy.array([[0.0]*image_shape]*len(atomic_numbers))
     for atomic_number in atomic_numbers:
         # Find relative atomic abundance for this edge.
-        abundance[iAtom],err[iAtom] = relative_atomic_abundance(eels_spectrum, eels_range_eV, background_ranges_eV[iAtom][:],
-                                                         atomic_number, edge_onsets_eV[iAtom], edge_deltas_eV[iAtom], beam_energy_eV,
+        #print(atomic_number, edge_onsets_ev[iAtom])
+        abundance[iAtom],err[iAtom],ed,diffx,egrid = relative_atomic_abundance(eels_spectrum, energy_range_ev, background_ranges_ev[iAtom][:],
+                                                         atomic_number, edge_onsets_ev[iAtom], edge_deltas_ev[iAtom], beam_energy_ev,
                                                          convergence_angle_rad, collection_angle_rad)
 
-        
+        edge_data = edge_data + [ed]
+        diff_cross_section = diff_cross_section + [diffx]
+        egrid_ev = egrid_ev + [egrid]
         stoichiometry[iAtom] = abundance[iAtom]
         total_number = total_number + abundance[iAtom]
         total_error  = numpy.sqrt(total_error**2 + err[iAtom]**2)
@@ -551,11 +617,14 @@ def stoichiometry_from_eels(eels_spectrum: numpy.ndarray, eels_range_eV: numpy.n
         stoichiometry[iAtom] = abundance[iAtom]/total_number
 
         # sum relative errors in quadrature.
-        error_in_stoichiometry[iAtom] = stoichiometry[iAtom]*numpy.sqrt((err[iAtom]/abundance[iAtom])**2 + (total_error/total_number)**2)
+        if abundance[iAtom] > 0:
+            error_in_stoichiometry[iAtom] = stoichiometry[iAtom]*numpy.sqrt((err[iAtom]/abundance[iAtom])**2 + (total_error/total_number)**2)
+        else:
+            error_in_stoichiometry[iAtom] = 0.0
             
         iAtom += 1
 
-    return stoichiometry,error_in_stoichiometry
+    return stoichiometry,error_in_stoichiometry, edge_data, diff_cross_section, egrid_ev
             
             
         
