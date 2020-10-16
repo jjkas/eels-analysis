@@ -347,8 +347,6 @@ def make_signal_like(data_and_metadata_src: DataAndMetadata.DataAndMetadata, dat
 
 def map_background_subtracted_signal(data_and_metadata: DataAndMetadata.DataAndMetadata, electron_shell: typing.Optional[PeriodicTable.ElectronShell], fit_ranges, signal_range) -> DataAndMetadata.DataAndMetadata:
     """Subtract si_k background from data and metadata with signal in first index."""
-    # For now set hardcoded switch.
-    useFEFF = True
 
     signal_index = -1
 
@@ -409,9 +407,11 @@ def energy_diff_cross_section_nm2_per_ev(atomic_number: int, shell_number: int, 
     The returned differential cross-section value is in units of nm * nm / eV.
     """
     energy_diff_sigma = None
+    egrid_ev = None
+    onset_ev = None
     eels_analysis_service = Registry.get_component("eels_analysis_service")
     if energy_diff_sigma is None and hasattr(eels_analysis_service, "energy_diff_cross_section_nm2_per_ev"):
-        energy_diff_sigma = eels_analysis_service.energy_diff_cross_section_nm2_per_ev(atomic_number=atomic_number,
+        energy_diff_sigma,egrid_ev,onset_ev = eels_analysis_service.energy_diff_cross_section_nm2_per_ev(atomic_number=atomic_number,
                                                                                        shell_number=shell_number,
                                                                                        subshell_index=subshell_index,
                                                                                        edge_onset_ev=edge_onset_ev,
@@ -427,7 +427,7 @@ def energy_diff_cross_section_nm2_per_ev(atomic_number: int, shell_number: int, 
                                                                                     beam_energy_ev,
                                                                                     convergence_angle_rad,
                                                                                     collection_angle_rad)
-    return energy_diff_sigma
+    return energy_diff_sigma, egrid_ev, onset_ev
 
 
 def partial_cross_section_nm2(atomic_number: int, shell_number: int, subshell_index: int,
@@ -438,6 +438,8 @@ def partial_cross_section_nm2(atomic_number: int, shell_number: int, subshell_in
     The return value units are nm * nm.
     """
     cross_section = None
+    energy_diff_sigma = None
+    egrid_ev = None
     eels_analysis_service = Registry.get_component("eels_analysis_service")
     if cross_section is None and hasattr(eels_analysis_service, "partial_cross_section_nm2"):
         cross_section = eels_analysis_service.partial_cross_section_nm2(atomic_number=atomic_number,
@@ -450,7 +452,7 @@ def partial_cross_section_nm2(atomic_number: int, shell_number: int, subshell_in
                                                                         collection_angle_rad=collection_angle_rad)
 
     if cross_section is None:
-        energy_diff_sigma = energy_diff_cross_section_nm2_per_ev(atomic_number=atomic_number,
+        energy_diff_sigma,egrid_ev,onset_thy = energy_diff_cross_section_nm2_per_ev(atomic_number=atomic_number,
                                                                  shell_number=shell_number,
                                                                  subshell_index=subshell_index,
                                                                  edge_onset_ev=edge_onset_ev,
@@ -459,10 +461,21 @@ def partial_cross_section_nm2(atomic_number: int, shell_number: int, subshell_in
                                                                  convergence_angle_rad=convergence_angle_rad,
                                                                  collection_angle_rad=collection_angle_rad)
 
+
         # Integrate over energy window to get partial cross-section
-        energy_sample_count = energy_diff_sigma.shape[0]
-        energy_step = edge_delta_ev / (energy_sample_count - 1)
-        cross_section = numpy.trapz(energy_diff_sigma, dx=energy_step)
+        #energy_sample_count = energy_diff_sigma.shape[0]
+        #energy_step = edge_delta_ev / (energy_sample_count - 1)
+        if len(energy_diff_sigma) > 0:
+            energy_step = egrid_ev[1] - egrid_ev[0]
+            energy_diff_sigma2 = energy_diff_sigma[numpy.where(egrid_ev <= edge_onset_ev + edge_delta_ev)]
+            egrid_ev2 = egrid_ev[numpy.where(egrid_ev < edge_onset_ev + edge_delta_ev)]
+            # integrate to theoretical onset + edge_delta
+            #print('onset_thy =',onset_thy)
+            cross_section = numpy.trapz(energy_diff_sigma2, dx=energy_step)
+        else:
+            energy_diff_sigma2 = energy_diff_sigma
+            egrid_ev2 = egrid_ev
+            cross_section = 0.0
 
     if cross_section is None and atomic_number == 32 and shell_number == 2 and subshell_index == 3:
         # special section for testing
@@ -473,7 +486,7 @@ def partial_cross_section_nm2(atomic_number: int, shell_number: int, subshell_in
         elif abs(edge_delta_ev - 200) < 3:
             cross_section = 1.40e-7
 
-    return cross_section
+    return cross_section, energy_diff_sigma2, egrid_ev2
 
 
 def relative_atomic_abundance(counts_edge: float, partial_cross_section_nm2: float) -> float:
