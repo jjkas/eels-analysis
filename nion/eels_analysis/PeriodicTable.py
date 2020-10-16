@@ -137,6 +137,22 @@ class PeriodicTable(metaclass=Singleton):
         edges.sort(key=operator.itemgetter(0))
         return [edge[1] for edge in edges]
 
+    def find_all_edges_in_energy_interval(self, energy_interval_ev: typing.Tuple[float, float], atomic_number_in = None) -> typing.List[ElectronShell]:
+        """Return list of all electron shells found within energy interval, sorted by energy."""
+        edges = list()  # typing.List[typing.Tuple[float, ElectronShell]]
+        for edge_data_item in self.__edge_data:
+            atomic_number = edge_data_item.get("z", 0)
+            if atomic_number_in is None or atomic_number_in == atomic_number:
+                edge_dict = edge_data_item.get("edges", dict())
+                # find lowest energy edge within each shell
+                edge_map = dict()
+                for eels_shell, energy in edge_dict.items():
+                    electron_shell = ElectronShell.from_eels_notation(atomic_number, eels_shell)
+                    if energy_interval_ev[0] <= energy <= energy_interval_ev[1]:
+                        edges.append((energy, electron_shell))
+        edges.sort(key=operator.itemgetter(0))
+        return [edge[1] for edge in edges]
+    
     def find_elements_in_energy_interval(self, energy_interval_ev: typing.Tuple[float, float]):
         """Return a dictionary of dictionaries, {atomic_number: edge_dict}, with all elements that have edges within the energy range.""" 
         element_data = {}  # typing.List[typing.Tuple[float, ElectronShell]]
