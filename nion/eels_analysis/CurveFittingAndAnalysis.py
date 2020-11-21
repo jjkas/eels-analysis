@@ -289,5 +289,5 @@ def signal_from_polynomial_background(data_values: numpy.ndarray, data_x_range: 
     signal_integral = numpy.trapz(signal_profile[..., signal_slice], dx = x_step)
     total_integral  = numpy.trapz(total_profile[..., signal_slice], dx = x_step)
     
-    return numpy.maximum(signal_integral,0.0), signal_profile, total_integral, background_model, x_values[profile_slice]
+    return numpy.maximum(signal_integral,0.0), signal_profile, total_integral, background_model, profile_range
 

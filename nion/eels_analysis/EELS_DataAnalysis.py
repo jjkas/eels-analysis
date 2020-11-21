@@ -9,7 +9,6 @@ import numpy
 import scipy.signal
 import math
 # The following is a library that allows range dictionaries through the RangeDict object.
-import ranges
 import typing
 import copy
 
@@ -19,6 +18,13 @@ from nion.eels_analysis import eels_analysis
 from nion.eels_analysis import PeriodicTable
 
 __experimental_edge_data = (None, None)
+
+def range_dict(begin, end, value):
+    d = {}
+    for i in range(begin,end+1):
+        d.update({i: value})
+
+    return d
 
 def find_species_from_experimental_edge_data(eels_spectrum: numpy.ndarray, energy_range_ev: numpy.ndarray, experimental_edge_data, search_range_ev, **kwargs) -> list:
     """Find chemical species associated with edge energy data produced by find_experimental_edge_energies along with spectrum.
@@ -69,23 +75,24 @@ def find_species_from_experimental_edge_data(eels_spectrum: numpy.ndarray, energ
     # Designation of major edges - only including up to 5000 eV.
     #major_edges = ['K','L2','L23','L3','M4','M45','M5','N4','N45','N5','N6','N67','N7','O4','O45','O5']
     # Reduced only includes first of series, e.g., L3 if L2,L3.
-    major_edges_reduced = ranges.RangeDict({ranges.Range(1,10):('K'),
-                                            ranges.Range(10,18):('K','L23', 'L3'),
-                                            ranges.Range(18,23):('K','L23','L3','M23','M3'),
-                                            ranges.Range(23,29):('L23','L3','M23','M3'),
-                                            ranges.Range(29,32):('L23','L3'),
-                                            ranges.Range(32,36):('L23','L3','M45','M5'),
-                                            ranges.Range(36,47):('L23','L3','M45','M5','N23','N3'),
-                                            ranges.Range(47,50):('L23','L3','M45','M5'),
-                                            ranges.Range(50,54):('L23','L3','M45','M5','N45','N5'),
-                                            ranges.Range(54,56):('M45','M5','N45','N5'),
-                                            ranges.Range(56,72):('M45','M5','N45','N5','O23','O3'),
-                                            ranges.Range(72,78):('M45','M5','O23','O3'),
-                                            ranges.Range(78,82):('M45','M5'),
-                                            ranges.Range(82,84):('M45','M5','O45','O5'),
-                                            ranges.Range(84,85):('M45','M5'),
-                                            ranges.Range(90,93):('M45','M5','N67','N7','O45','O5')
-                                            })
+    major_edges_reduced = {}
+    major_edges_reduced.update(range_dict(1,9,('K')))
+    major_edges_reduced.update(range_dict(10,17,('K','L23','L3')))
+    major_edges_reduced.update(range_dict(18,22,('K','L23','L3','M23','M3')))
+    major_edges_reduced.update(range_dict(23,28,('L23','L3','M23','M3')))
+    major_edges_reduced.update(range_dict(29,31,('L23','L3')))
+    major_edges_reduced.update(range_dict(32,35,('L23','L3','M45','M5')))
+    major_edges_reduced.update(range_dict(36,46,('L23','L3','M45','M5','N23','N3')))
+    major_edges_reduced.update(range_dict(47,49,('L23','L3','M45','M5')))
+    major_edges_reduced.update(range_dict(50,53,('L23','L3','M45','M5','N45','N5')))
+    major_edges_reduced.update(range_dict(54,55,('M45','M5','N45','N5')))
+    major_edges_reduced.update(range_dict(56,71,('M45','M5','N45','N5','O23','O3')))
+    major_edges_reduced.update(range_dict(72,77,('M45','M5','O23','O3')))
+    major_edges_reduced.update(range_dict(78,81,('M45','M5')))
+    major_edges_reduced.update(range_dict(82,83,('M45','M5','O45','O5')))
+    major_edges_reduced.update(range_dict(84,84,('M45','M5')))
+    major_edges_reduced.update(range_dict(90,92,('M45','M5','N67','N7','O45','O5')))
+
     # Start by looping through experimental edge energies and finding all tabulated electron shells that have edges near this.
     # Edge energies are ordered by quality factor from largest to smallest, so most important edges will be checked first.
     ptable = PeriodicTable.PeriodicTable()
@@ -142,7 +149,7 @@ def find_species_from_experimental_edge_data(eels_spectrum: numpy.ndarray, energ
                         atom_data = atom_data + [[int(atom)]]
                         atom_data[i_atom] = atom_data[i_atom] + [[(best_edge_name,best_edge_for_this_exp_edge,exp_edge_energy)]]
                     else:
-                        atom_data[i_atom][1] = atom_data[i_atom][1] + [[(best_edge_name,best_edge_for_this_exp_edge,exp_edge_energy)]]
+                        atom_data[i_atom][1] = atom_data[i_atom][1] + [(best_edge_name,best_edge_for_this_exp_edge,exp_edge_energy)]
                     
                     if best_edge_name in major_edges_for_this_atom:
                         major_edges_for_this_atom.remove(best_edge_name)
@@ -524,22 +531,19 @@ def relative_atomic_abundance(core_loss_spectra: numpy.ndarray, core_loss_range_
                                                                     beam_energy_eV, convergence_angle_rad, collection_angle_rad)
     #print("cross_section_data", cross_section_data, edge_data[0])
     cross_section = cross_section_data #cross_section_data[0]
+    atomic_abundance = numpy.where(cross_section > 0.0, edge_data[0] / cross_section, numpy.zeros_like(edge_data[0]))
 
-    if cross_section > 0:
-        atomic_abundance = edge_data[0] / cross_section 
-    else: 
-        atomic_abundance = 0
     # Now find errors. Assume Poisson error for experimental cross section (S_exp), 10% theoretical errors (s_thy). Then error in relative atomic abundance is
     # S = atomic_abundance*\sqrt[ (S_exp/cross_exp)^2 + (S_thy/cross_thy)^2 ]
     # Poisson error is sqrt of integral of total experimental signal. Total integral is = edge_data[1]
     sig_sq_exp = edge_data[2]
     relative_error_thy = 0.1 # 10% error
-    if edge_data[0] > 0:
-        error = atomic_abundance*numpy.sqrt(sig_sq_exp/(edge_data[0])**2 + relative_error_thy**2)
-    else:
-        error = 0
+    print(edge_data[0])
+    i=0
+    sig_sq_over_cross = numpy.where(edge_data[0] > 0.0, sig_sq_exp/edge_data[0]**2, 0.0)
+    error = atomic_abundance*numpy.sqrt(sig_sq_over_cross + relative_error_thy**2)
     
-    return atomic_abundance, error, edge_data,diff_cross_section*atomic_abundance,egrid_ev
+    return atomic_abundance, error, edge_data, numpy.array(diff_cross_section)*atomic_abundance[0], egrid_ev
 
 def stoichiometry_from_eels(eels_spectrum: numpy.ndarray, energy_range_ev: numpy.ndarray, background_ranges_ev: typing.List[numpy.ndarray], atomic_numbers: typing.List[int],
                                  edge_onsets_ev: typing.List[typing.List[float]], edge_deltas_ev: typing.List[float], 
@@ -614,13 +618,10 @@ def stoichiometry_from_eels(eels_spectrum: numpy.ndarray, energy_range_ev: numpy
 
     iAtom = 0
     for atomic_number in atomic_numbers:
-        stoichiometry[iAtom] = abundance[iAtom]/total_number
+        stoichiometry[iAtom] = numpy.where(total_number > 0.0, abundance[iAtom]/total_number, -1)
 
         # sum relative errors in quadrature.
-        if abundance[iAtom] > 0:
-            error_in_stoichiometry[iAtom] = stoichiometry[iAtom]*numpy.sqrt((err[iAtom]/abundance[iAtom])**2 + (total_error/total_number)**2)
-        else:
-            error_in_stoichiometry[iAtom] = 0.0
+        error_in_stoichiometry[iAtom] = numpy.where(abundance[iAtom] > 0, stoichiometry[iAtom]*numpy.sqrt((err[iAtom]/abundance[iAtom])**2 + (total_error/total_number)**2), 0.0)
             
         iAtom += 1
 

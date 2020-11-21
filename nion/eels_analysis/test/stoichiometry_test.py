@@ -5,6 +5,7 @@ from pathlib import Path
 from nion.eels_analysis import EELS_DataAnalysis 
 from atomic_eels import atomic_diff_cross_section
 import matplotlib.pyplot as plt
+from nionswift_plugin.feff_interface import FEFF_EELS_Service
 
 class TestLibrary(unittest.TestCase):
 
@@ -48,8 +49,11 @@ class TestLibrary(unittest.TestCase):
         erange[0] = egrid_eV[0]
         erange[1] = egrid_eV[-1] + estep
         
-        stoichiometry,error_in_stoichiometry = EELS_DataAnalysis.stoichiometry_from_eels(energyDiffSigma_total,erange,background_ranges,atomic_numbers,edge_onsets,edge_deltas,
-                                                beam_energy_keV*1000.0, convergence_angle_mrad/1000.0, collection_angle_mrad/1000.0)
+        stoich_data = EELS_DataAnalysis.stoichiometry_from_eels(energyDiffSigma_total,erange,background_ranges,atomic_numbers,edge_onsets,edge_deltas,
+                beam_energy_keV*1000.0, convergence_angle_mrad/1000.0, collection_angle_mrad/1000.0)
+        stoichiometry = stoich_data[0]
+        error_in_stoichiometry = stoich_data[1]
+        
         
         iAtom = 0
         print("Stoichiometry from theoretical EELS signal of BN:")
@@ -119,8 +123,11 @@ class TestLibrary(unittest.TestCase):
         erange[0] = egrid_eV[0]
         erange[1] = egrid_eV[-1]
         
-        stoichiometry,error_in_stoichiometry = EELS_DataAnalysis.stoichiometry_from_eels(energyDiffSigma_total,erange,background_ranges,atomic_numbers,edge_onsets,edge_deltas,
-                                                beam_energy_keV*1000.0, convergence_angle_mrad/1000.0, collection_angle_mrad/1000.0)
+        stoich_data = EELS_DataAnalysis.stoichiometry_from_eels(energyDiffSigma_total,erange,background_ranges,atomic_numbers,edge_onsets,edge_deltas,
+                beam_energy_keV*1000.0, convergence_angle_mrad/1000.0, collection_angle_mrad/1000.0)
+        stoichiometry = stoich_data[0]
+        error_in_stoich = stoich_data[1]
+        
         
         iAtom = 0
         print("Stoichiometry from multidimensional spectrum array.")
@@ -173,8 +180,10 @@ class TestLibrary(unittest.TestCase):
             erange[0] = energy_grid[0]
             erange[1] = energy_grid[-1]
 
-            stoich,error_in_stoich = EELS_DataAnalysis.stoichiometry_from_eels(spectrum,erange,background_ranges,atomic_numbers,edge_onsets,edge_deltas,
-                                                                      beam_energy_keV*1000.0, convergence_angle_mrad/1000.0, collection_angle_mrad/1000.0)
+            stoich_data = EELS_DataAnalysis.stoichiometry_from_eels(spectrum,erange,background_ranges,atomic_numbers,edge_onsets,edge_deltas,
+                    beam_energy_keV*1000.0, convergence_angle_mrad/1000.0, collection_angle_mrad/1000.0)
+            stoich = stoich_data[0]
+            error_in_stoich = stoich_data[1]
         
             iAtom = 0
             DM_Stoichometry = DM_Stoichiometries[iData]

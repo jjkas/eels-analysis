@@ -39,7 +39,7 @@ class TestEELSAnalysisFunctions(unittest.TestCase):
 
 
     def test_find_species_from_experimental_edge_data(self):
-        if False: # For now turn this test off. I will keep the directory of all EELS Atlas data on hand for more testing.
+        if True: # For now turn this test off. I will keep the directory of all EELS Atlas data on hand for more testing.
             return
 
         df=pandas.read_csv("EELS_Atlas_Major/files_HE.dat", delim_whitespace=True, header=None)

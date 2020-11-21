@@ -368,7 +368,8 @@ def map_background_subtracted_signal(data_and_metadata: DataAndMetadata.DataAndM
         beam_collection_angle_rad = data_and_metadata.metadata.get("beam_collection_angle_rad")
 
         if beam_energy_ev is not None and beam_convergence_angle_rad is not None and beam_collection_angle_rad is not None:
-            cross_section = partial_cross_section_nm2(electron_shell.atomic_number, electron_shell.shell_number, electron_shell.subshell_index, edge_onset, edge_delta, beam_energy_ev, beam_convergence_angle_rad, beam_collection_angle_rad)
+            cross_section_data = partial_cross_section_nm2(electron_shell.atomic_number, electron_shell.shell_number, electron_shell.subshell_index, edge_onset, edge_delta, beam_energy_ev, beam_convergence_angle_rad, beam_collection_angle_rad)
+            cross_section = cross_section_data[0]
 
     data = data_and_metadata.data
 
