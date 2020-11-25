@@ -20,6 +20,7 @@ from nion.eels_analysis import PeriodicTable
 __experimental_edge_data = (None, None)
 
 def range_dict(begin, end, value):
+    ''' Returns a dictionary that has keys in the range from begin - end, where begin and end are integers. The value of all items is set to value. '''
     d = {}
     for i in range(begin,end+1):
         d.update({i: value})

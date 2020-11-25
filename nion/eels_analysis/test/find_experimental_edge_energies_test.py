@@ -8,9 +8,6 @@ import random
 import sys
 import unittest
 # The below are for more extensive testing of all eels atlas data.
-import glob
-import pandas 
-import matplotlib.pyplot as plt
 
 # niondata must be available as a module.
 # it can be added using something similar to
@@ -61,6 +58,10 @@ class TestEELSAnalysisFunctions(unittest.TestCase):
         if True: # For now turn this test off. I will keep the directory of all EELS Atlas data on hand for more testing.
             return
         
+        import glob
+        import pandas 
+        import matplotlib.pyplot as plt
+
         df=pandas.read_csv("EELS_Atlas_Major/files_HE.dat", delim_whitespace=True, header=None)
         file_names,tmp1,efin,tmp2,estart=df.to_numpy().T
 
