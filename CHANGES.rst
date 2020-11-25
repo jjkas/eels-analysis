@@ -1,8 +1,21 @@
 Changelog (nionswift-eels-analysis)
 ===================================
 
-0.4.5 (unreleased):
+0.5.2 (2020-11-13):
 -------------------
+- Fix issue with single channel zero loss peaks in thickness calculation.
+- Ensure default background is power law.
+- Improve wording in background menu.
+
+0.5.1 (2020-10-06):
+-------------------
+- Add exponential functions for two-area method.
+- Add two-area background fitting class.
+- Improve speed of polynomial background and fix power law.
+
+0.5.0 (2020-08-31):
+-------------------
+- Rework background models to allow for plug-in models.
 - Made Align ZLP output the measured shifts in addition to the aligned spectra.
 - Allow graphics to select the ROI for aligning spectra in Align ZLP.
 - Allow 2D images in Align ZLP and interpret y-axis as sequence axis.
