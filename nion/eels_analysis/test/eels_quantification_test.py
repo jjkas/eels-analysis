@@ -10,7 +10,6 @@ import unittest
 # The below are for more extensive testing of all eels atlas data.
 import re
 import string
-import matplotlib.pyplot as plt
 
 # niondata must be available as a module.
 # it can be added using something similar to
@@ -158,6 +157,7 @@ class TestEELSAnalysisFunctions(unittest.TestCase):
                 print('\n\n###############################################')
 
                 if False:
+                    import matplotlib.pyplot as plt
                     e_step = (quant_data[iat][4][1] - quant_data[iat][4][0])/quant_data[iat][1][0].size
                     profile_grid = numpy.arange(quant_data[iat][4][0],quant_data[iat][4][1],e_step)
                     plt.plot(profile_grid,quant_data[iat][1][0])
