@@ -5,6 +5,7 @@ from pathlib import Path
 from nion.eels_analysis import EELS_DataAnalysis 
 from nionswift_plugin.feff_interface import FEFF_EELS_Service
 
+
 class TestLibrary(unittest.TestCase):
 
     def test_stoichiometry_found_from_theoretical_EELS(self):
