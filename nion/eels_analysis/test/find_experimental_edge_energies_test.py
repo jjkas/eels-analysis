@@ -34,7 +34,7 @@ class TestEELSAnalysisFunctions(unittest.TestCase):
 
     def test_find_experimental_edge_energies_with_defaults(self):
         # Tests the function without any optional parameters.s
-        file_name = os.path.join('Test_Data','DectrisSI.csv')
+        file_name = os.path.join('Test_Data','DectrisSI_callibrated.dat')
 
         # Load data from file
         energies, eels_spectrum = numpy.loadtxt(file_name, delimiter=',',unpack=True)
@@ -182,7 +182,7 @@ class TestEELSAnalysisFunctions(unittest.TestCase):
         # Test the keywork re_analyze. The function keeps all edge data from the previous analysis. If re_analyze = False,
         # the function will only change the filtering options to select more or less edges. The filtering should be very
         # fast.
-        file_name = os.path.join('Test_Data','DectrisSI.csv')
+        file_name = os.path.join('Test_Data','DectrisSI_callibrated.dat')
         
         energies, eels_spectrum = numpy.loadtxt(file_name, delimiter=',',unpack=True)
         energy_step = (energies[-1] - energies[0])/energies.size
@@ -207,7 +207,7 @@ class TestEELSAnalysisFunctions(unittest.TestCase):
 
     def test_find_experimental_edge_energies_sensitivity(self):
         # Test changes to the sensitivity, which will include less poles as it decreases from 1 to 0. 
-        file_name = os.path.join('Test_Data','DectrisSI.csv')
+        file_name = os.path.join('Test_Data','DectrisSI_callibrated.dat')
 
         energies, eels_spectrum = numpy.loadtxt(file_name, delimiter=',',unpack=True)
         energy_step = (energies[-1] - energies[0])/energies.size
